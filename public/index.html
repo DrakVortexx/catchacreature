@@ -4,185 +4,304 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Catch a Creature</title>
-  <link rel="stylesheet" href="assets/style.css">
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <style>
+    /* Reset */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --secondary: #8b5cf6;
+      --accent: #f59e0b;
+      --success: #10b981;
+      --danger: #ef4444;
+      --dark: #1e1b4b;
+      --darker: #0f0d24;
+      --light: #f8fafc;
+      --gray: #64748b;
+      --card-bg: rgba(30, 27, 75, 0.95);
+      --border: rgba(99, 102, 241, 0.3);
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0f0d24 0%, #1e1b4b 50%, #312e81 100%);
+      color: var(--light);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ── Login ─────────────────────────────────────────── */
+    #login-screen {
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-container {
+      background: var(--card-bg);
+      padding: 60px 50px;
+      border-radius: 24px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+      border: 1px solid var(--border);
+      text-align: center;
+      max-width: 450px;
+      width: 90%;
+      animation: slideUp 0.5s ease-out;
+    }
+
+    .logo h1 {
+      font-size: 42px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+
+    .logo p {
+      color: var(--gray);
+      font-size: 16px;
+      margin-bottom: 40px;
+    }
+
+    .login-form { display: flex; flex-direction: column; gap: 20px; }
+
+    .input-group input {
+      width: 100%;
+      padding: 16px 20px;
+      font-size: 16px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      background: rgba(15, 13, 36, 0.8);
+      color: var(--light);
+      transition: all 0.3s ease;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.2);
+    }
+
+    .input-group input::placeholder { color: var(--gray); }
+
+    .btn-primary {
+      width: 100%;
+      padding: 16px 32px;
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(99,102,241,0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(99,102,241,0.5);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      background: rgba(99,102,241,0.2);
+      color: var(--light);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(99,102,241,0.3);
+      border-color: var(--primary);
+    }
+
+    .form-hint { color: var(--gray); font-size: 14px; margin-top: 4px; }
+
+    .error-msg {
+      color: var(--danger);
+      font-size: 14px;
+      font-weight: 600;
+      min-height: 20px;
+    }
+
+    /* ── Dashboard ─────────────────────────────────────── */
+    #dashboard {
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .dashboard-container {
+      width: 100%;
+      max-width: 1100px;
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .user-info h2 { font-size: 32px; font-weight: 700; margin-bottom: 6px; }
+    .user-info p  { color: var(--gray); font-size: 16px; }
+
+    .dashboard-content {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .dashboard-card {
+      background: var(--card-bg);
+      padding: 32px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      text-align: center;
+      transition: all 0.3s ease;
+      animation: slideUp 0.5s ease-out;
+    }
+
+    .dashboard-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+      border-color: var(--primary);
+    }
+
+    .card-icon { font-size: 48px; margin-bottom: 16px; }
+    .dashboard-card h3 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .dashboard-card p  { color: var(--gray); margin-bottom: 20px; font-size: 15px; }
+    .dashboard-card .btn-primary { width: auto; padding: 12px 32px; font-size: 16px; }
+    .dashboard-card .btn-secondary { width: 100%; }
+
+    /* ── Notifications ─────────────────────────────────── */
+    #notifications {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .notification {
+      padding: 14px 28px;
+      border-radius: 12px;
+      color: white;
+      font-weight: 600;
+      font-size: 15px;
+      animation: slideDown 0.3s ease-out;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    .notification.success { background: linear-gradient(135deg, var(--success) 0%, #059669 100%); }
+    .notification.error   { background: linear-gradient(135deg, var(--danger)  0%, #dc2626 100%); }
+    .notification.info    { background: linear-gradient(135deg, #3b82f6        0%, #2563eb 100%); }
+
+    /* ── Animations ────────────────────────────────────── */
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Scrollbar ─────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(15,13,36,0.5); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
+  </style>
 </head>
 <body>
-  <div id="game-container"></div>
 
   <!-- Login Screen -->
-  <div id="login-screen" class="screen">
+  <div id="login-screen">
     <div class="login-container">
       <div class="logo">
         <h1>Catch a Creature</h1>
         <p>Battle, Collect, Conquer</p>
       </div>
-      <form id="login-form" class="login-form">
+      <form id="login-form" class="login-form" autocomplete="off">
         <div class="input-group">
-          <input type="text" id="username-input" placeholder="Username" required maxlength="20">
+          <input type="text" id="username-input" placeholder="Username" required maxlength="20" autocomplete="username">
         </div>
         <div class="input-group">
-          <input type="password" id="password-input" placeholder="Password" required maxlength="50">
+          <input type="password" id="password-input" placeholder="Password" required maxlength="50" autocomplete="current-password">
         </div>
-        <button type="submit" class="btn-primary">Enter World</button>
+        <p class="error-msg" id="login-error"></p>
+        <button type="submit" class="btn-primary" id="login-btn">Enter World</button>
         <p class="form-hint">New accounts are created automatically</p>
       </form>
     </div>
   </div>
 
   <!-- Dashboard -->
-  <div id="dashboard" class="screen hidden">
+  <div id="dashboard" class="hidden">
     <div class="dashboard-container">
       <header class="dashboard-header">
         <div class="user-info">
           <h2 id="dashboard-username">Player</h2>
-          <p id="dashboard-stats">0 Creatures Collected</p>
-          <div id="collection-progress" class="collection-progress"></div>
+          <p id="dashboard-stats">Loading stats…</p>
         </div>
         <button id="btn-logout" class="btn-secondary">Logout</button>
       </header>
 
       <div class="dashboard-content">
-        <div class="dashboard-card main-action">
-          <div class="card-icon">⚔️</div>
-          <h3>Adventure</h3>
-          <p>Explore the forest and battle creatures</p>
-          <button id="btn-play" class="btn-primary">Start Playing</button>
-        </div>
-
         <div class="dashboard-card">
           <div class="card-icon">📚</div>
           <h3>Collection</h3>
           <p>View your caught creatures</p>
-          <button id="btn-collection" class="btn-secondary">View Collection</button>
+          <button class="btn-secondary" disabled>Coming Soon</button>
         </div>
 
         <div class="dashboard-card">
           <div class="card-icon">🌐</div>
           <h3>Servers</h3>
           <p>Browse and join game servers</p>
-          <button id="btn-servers" class="btn-secondary">Browse Servers</button>
+          <button class="btn-secondary" disabled>Coming Soon</button>
         </div>
 
         <div class="dashboard-card">
           <div class="card-icon">⚙️</div>
           <h3>Settings</h3>
-          <p>Configure game options</p>
-          <button id="btn-settings" class="btn-secondary">Settings</button>
+          <p>Configure your account</p>
+          <button class="btn-secondary" disabled>Coming Soon</button>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Server Browser -->
-  <div id="server-browser" class="screen hidden">
-    <div class="modal-container">
-      <div class="modal-header">
-        <h2>Game Servers</h2>
-        <button id="btn-close-servers" class="btn-close">✕</button>
-      </div>
-      <div id="lobby-list" class="server-list"></div>
-    </div>
-  </div>
-
-  <!-- Collection View -->
-  <div id="collection-view" class="screen hidden">
-    <div class="modal-container">
-      <div class="modal-header">
-        <h2>Your Collection</h2>
-        <button id="btn-close-collection" class="btn-close">✕</button>
-      </div>
-      <div class="collection-controls">
-        <select id="rarity-filter">
-          <option value="all">All Rarities</option>
-          <option value="common">Common</option>
-          <option value="uncommon">Uncommon</option>
-          <option value="rare">Rare</option>
-          <option value="epic">Epic</option>
-          <option value="legendary">Legendary</option>
-          <option value="mythic">Mythic</option>
-          <option value="divine">Divine</option>
-          <option value="celestial">Celestial</option>
-          <option value="eternal">Eternal</option>
-          <option value="omniversal">Omniversal</option>
-        </select>
-        <input type="text" id="search-creatures" placeholder="Search creatures...">
-      </div>
-      <div id="creature-grid" class="creature-grid"></div>
-    </div>
-  </div>
-
-  <!-- Settings -->
-  <div id="settings" class="screen hidden">
-    <div class="modal-container">
-      <div class="modal-header">
-        <h2>Settings</h2>
-        <button id="btn-close-settings" class="btn-close">✕</button>
-      </div>
-      <div class="settings-content">
-        <div class="setting-item">
-          <label>Music Volume</label>
-          <input type="range" id="music-volume" min="0" max="100" value="50">
-        </div>
-        <div class="setting-item">
-          <label>SFX Volume</label>
-          <input type="range" id="sfx-volume" min="0" max="100" value="50">
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- In-Game HUD -->
-  <div id="game-hud" class="hidden">
-    <div class="hud-left">
-      <div class="hud-panel">
-        <h3 id="hud-username">Player</h3>
-        <div id="active-creature-info" class="creature-hud"></div>
-        <div id="combo-display" class="combo-display hidden">
-          <span id="combo-count">0</span>x COMBO!
-        </div>
-      </div>
-    </div>
-    <div class="hud-right">
-      <div class="hud-panel">
-        <h3 id="hud-lobby">Lobby 1</h3>
-        <p id="hud-players">1/8 Players</p>
-        <div id="streak-display" class="streak-display">
-          🔥 <span id="streak-count">0</span> Streak
-        </div>
-      </div>
-    </div>
-    <div class="hud-bottom">
-      <button id="btn-catch" class="hud-btn">Fight (E)</button>
-      <button id="btn-store" class="hud-btn">Store</button>
-      <button id="btn-menu" class="hud-btn">Menu</button>
-    </div>
-    <div class="hud-chat">
-      <div id="chat-messages" class="chat-messages"></div>
-      <input type="text" id="chat-input" placeholder="Press Enter to chat...">
-    </div>
-  </div>
-
-  <!-- Battle UI -->
-  <div id="battle-ui" class="screen hidden">
-    <div class="battle-container">
-      <div class="battle-header">
-        <h2>Battle!</h2>
-      </div>
-      <div class="battle-arena">
-        <div class="battle-side your-side">
-          <h3>Your Creature</h3>
-          <div id="player1-creatures"></div>
-        </div>
-        <div class="battle-vs">VS</div>
-        <div class="battle-side enemy-side">
-          <h3>Wild Creature</h3>
-          <div id="player2-creatures"></div>
-        </div>
-      </div>
-      <div class="battle-actions">
-        <button id="btn-attack" class="btn-battle">Attack</button>
-        <button id="btn-exit-battle" class="btn-battle btn-secondary">Run Away</button>
       </div>
     </div>
   </div>
@@ -190,14 +309,6 @@
   <!-- Notifications -->
   <div id="notifications"></div>
 
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-    }
-  }
-  </script>
-  <script type="module" src="assets/game.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>
