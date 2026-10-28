@@ -45,7 +45,7 @@ db.creatures = [
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
 // In-memory lobby management (8 rooms max)
 const MAX_LOBBIES = 8;
@@ -68,26 +68,35 @@ for (let i = 0; i < MAX_LOBBIES; i++) {
 // Register
 app.post('/api/register', (req, res) => {
   try {
-    const { username } = req.body;
+    const { username, password } = req.body;
+
+    // Check if username already exists
+    for (const [id, u] of db.users) {
+      if (u.username === username) {
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+    }
+
     const userId = `user-${Date.now()}`;
     db.users.set(userId, {
       id: userId,
       username,
+      password, // In production, hash this!
       created_at: new Date(),
       battles_won: 0,
       battles_lost: 0,
       trades_completed: 0
     });
-    res.json({ userId, username });
+    res.json({ userId, username, isNewUser: true });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// Login (simplified - just get or create user)
+// Login
 app.post('/api/login', (req, res) => {
   try {
-    const { username } = req.body;
+    const { username, password } = req.body;
     let user = null;
 
     for (const [id, u] of db.users) {
@@ -98,19 +107,27 @@ app.post('/api/login', (req, res) => {
     }
 
     if (!user) {
+      // Auto-register if user doesn't exist
       const userId = `user-${Date.now()}`;
       user = {
         id: userId,
         username,
+        password,
         created_at: new Date(),
         battles_won: 0,
         battles_lost: 0,
         trades_completed: 0
       };
       db.users.set(userId, user);
+      return res.json({ userId: user.id, username: user.username, isNewUser: true });
     }
 
-    res.json({ userId: user.id, username: user.username });
+    // Check password
+    if (user.password !== password) {
+      return res.status(401).json({ error: 'Incorrect password' });
+    }
+
+    res.json({ userId: user.id, username: user.username, isNewUser: false });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

@@ -813,42 +813,50 @@ function animate() {
 }
 
 // API Functions
-async function login(username) {
+async function login(username, password) {
   try {
     const response = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username })
+      body: JSON.stringify({ username, password })
     });
 
     const data = await response.json();
-    gameState.userId = data.userId;
-    gameState.username = data.username;
+    if (response.ok) {
+      gameState.userId = data.userId;
+      gameState.username = data.username;
 
-    // Give player Lucas da Vucas as starter
-    const starterCreature = gameState.creatures.find(c => c.id === '0');
-    if (starterCreature) {
-      gameState.activeCreature = {
-        ...starterCreature,
-        currentHp: starterCreature.hp,
-        userCreatureId: `uc-${Date.now()}`
-      };
+      // Give player Lucas da Vucas as starter (only if first time)
+      if (data.isNewUser) {
+        const starterCreature = gameState.creatures.find(c => c.id === '0');
+        if (starterCreature) {
+          gameState.activeCreature = {
+            ...starterCreature,
+            currentHp: starterCreature.hp,
+            userCreatureId: `uc-${Date.now()}`
+          };
 
-      // Save to server
-      await fetch('/api/creatures/catch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: gameState.userId,
-          creatureId: '0',
-          location: { x: 0, y: 0, z: 0 }
-        })
-      });
+          // Save to server
+          await fetch('/api/creatures/catch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: gameState.userId,
+              creatureId: '0',
+              location: { x: 0, y: 0, z: 0 }
+            })
+          });
+        }
+      }
+
+      return data;
+    } else {
+      showNotification(data.error || 'Login failed', 'error');
+      return null;
     }
-
-    return data;
   } catch (error) {
     console.error('Login error:', error);
+    showNotification('Login failed', 'error');
     return null;
   }
 }
@@ -1082,10 +1090,15 @@ async function init() {
   // Setup UI event listeners
   document.getElementById('btn-login').addEventListener('click', async () => {
     const username = document.getElementById('username-input').value.trim();
-    if (username) {
-      await login(username);
-      document.getElementById('login-section').classList.add('hidden');
-      showNotification(`Welcome, ${username}!`, 'success');
+    const password = document.getElementById('password-input').value.trim();
+    if (username && password) {
+      const result = await login(username, password);
+      if (result) {
+        document.getElementById('login-section').classList.add('hidden');
+        showNotification(`Welcome, ${username}!`, 'success');
+      }
+    } else {
+      showNotification('Please enter username and password', 'error');
     }
   });
 
