@@ -14,29 +14,14 @@ CREATE TABLE users (
   trades_completed INT DEFAULT 0
 );
 
--- Creatures table (creature types)
-CREATE TABLE creatures (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name VARCHAR(100) NOT NULL,
-  rarity VARCHAR(20) NOT NULL CHECK (rarity IN ('common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'divine', 'celestial', 'eternal', 'omniversal')),
-  attack INT NOT NULL,
-  defense INT NOT NULL,
-  speed INT NOT NULL,
-  hp INT NOT NULL,
-  special_ability TEXT,
-  model_data JSONB,
-  spawn_rate DECIMAL(5,4) NOT NULL
-);
-
 -- User creatures (caught creatures)
 CREATE TABLE user_creatures (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  creature_id UUID REFERENCES creatures(id),
+  creature_id VARCHAR(10) NOT NULL,
   caught_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  location_x DECIMAL(10,2),
-  location_y DECIMAL(10,2),
-  location_z DECIMAL(10,2),
+  is_active BOOLEAN DEFAULT false,
+  current_hp INT,
   is_tradable BOOLEAN DEFAULT true,
   in_battle BOOLEAN DEFAULT false
 );
