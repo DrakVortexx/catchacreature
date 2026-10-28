@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catch a Creature</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+  <div id="game-container"></div>
+
+  <!-- Login Screen -->
+  <div id="login-screen" class="screen">
+    <div class="login-container">
+      <div class="logo">
+        <h1>Catch a Creature</h1>
+        <p>Battle, Collect, Conquer</p>
+      </div>
+      <form id="login-form" class="login-form">
+        <div class="input-group">
+          <input type="text" id="username-input" placeholder="Username" required maxlength="20">
+        </div>
+        <div class="input-group">
+          <input type="password" id="password-input" placeholder="Password" required maxlength="50">
+        </div>
+        <button type="submit" class="btn-primary">Enter World</button>
+        <p class="form-hint">New accounts are created automatically</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="screen hidden">
+    <div class="dashboard-container">
+      <header class="dashboard-header">
+        <div class="user-info">
+          <h2 id="dashboard-username">Player</h2>
+          <p id="dashboard-stats">0 Creatures Collected</p>
+          <div id="collection-progress" class="collection-progress"></div>
+        </div>
+        <button id="btn-logout" class="btn-secondary">Logout</button>
+      </header>
+
+      <div class="dashboard-content">
+        <div class="dashboard-card main-action">
+          <div class="card-icon">⚔️</div>
+          <h3>Adventure</h3>
+          <p>Explore the forest and battle creatures</p>
+          <button id="btn-play" class="btn-primary">Start Playing</button>
+        </div>
+
+        <div class="dashboard-card">
+          <div class="card-icon">📚</div>
+          <h3>Collection</h3>
+          <p>View your caught creatures</p>
+          <button id="btn-collection" class="btn-secondary">View Collection</button>
+        </div>
+
+        <div class="dashboard-card">
+          <div class="card-icon">🌐</div>
+          <h3>Servers</h3>
+          <p>Browse and join game servers</p>
+          <button id="btn-servers" class="btn-secondary">Browse Servers</button>
+        </div>
+
+        <div class="dashboard-card">
+          <div class="card-icon">⚙️</div>
+          <h3>Settings</h3>
+          <p>Configure game options</p>
+          <button id="btn-settings" class="btn-secondary">Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Server Browser -->
+  <div id="server-browser" class="screen hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>Game Servers</h2>
+        <button id="btn-close-servers" class="btn-close">✕</button>
+      </div>
+      <div id="lobby-list" class="server-list"></div>
+    </div>
+  </div>
+
+  <!-- Collection View -->
+  <div id="collection-view" class="screen hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>Your Collection</h2>
+        <button id="btn-close-collection" class="btn-close">✕</button>
+      </div>
+      <div class="collection-controls">
+        <select id="rarity-filter">
+          <option value="all">All Rarities</option>
+          <option value="common">Common</option>
+          <option value="uncommon">Uncommon</option>
+          <option value="rare">Rare</option>
+          <option value="epic">Epic</option>
+          <option value="legendary">Legendary</option>
+          <option value="mythic">Mythic</option>
+          <option value="divine">Divine</option>
+          <option value="celestial">Celestial</option>
+          <option value="eternal">Eternal</option>
+          <option value="omniversal">Omniversal</option>
+        </select>
+        <input type="text" id="search-creatures" placeholder="Search creatures...">
+      </div>
+      <div id="creature-grid" class="creature-grid"></div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div id="settings" class="screen hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button id="btn-close-settings" class="btn-close">✕</button>
+      </div>
+      <div class="settings-content">
+        <div class="setting-item">
+          <label>Music Volume</label>
+          <input type="range" id="music-volume" min="0" max="100" value="50">
+        </div>
+        <div class="setting-item">
+          <label>SFX Volume</label>
+          <input type="range" id="sfx-volume" min="0" max="100" value="50">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- In-Game HUD -->
+  <div id="game-hud" class="hidden">
+    <div class="hud-left">
+      <div class="hud-panel">
+        <h3 id="hud-username">Player</h3>
+        <div id="active-creature-info" class="creature-hud"></div>
+        <div id="combo-display" class="combo-display hidden">
+          <span id="combo-count">0</span>x COMBO!
+        </div>
+      </div>
+    </div>
+    <div class="hud-right">
+      <div class="hud-panel">
+        <h3 id="hud-lobby">Lobby 1</h3>
+        <p id="hud-players">1/8 Players</p>
+        <div id="streak-display" class="streak-display">
+          🔥 <span id="streak-count">0</span> Streak
+        </div>
+      </div>
+    </div>
+    <div class="hud-bottom">
+      <button id="btn-catch" class="hud-btn">Fight (E)</button>
+      <button id="btn-store" class="hud-btn">Store</button>
+      <button id="btn-menu" class="hud-btn">Menu</button>
+    </div>
+    <div class="hud-chat">
+      <div id="chat-messages" class="chat-messages"></div>
+      <input type="text" id="chat-input" placeholder="Press Enter to chat...">
+    </div>
+  </div>
+
+  <!-- Battle UI -->
+  <div id="battle-ui" class="screen hidden">
+    <div class="battle-container">
+      <div class="battle-header">
+        <h2>Battle!</h2>
+      </div>
+      <div class="battle-arena">
+        <div class="battle-side your-side">
+          <h3>Your Creature</h3>
+          <div id="player1-creatures"></div>
+        </div>
+        <div class="battle-vs">VS</div>
+        <div class="battle-side enemy-side">
+          <h3>Wild Creature</h3>
+          <div id="player2-creatures"></div>
+        </div>
+      </div>
+      <div class="battle-actions">
+        <button id="btn-attack" class="btn-battle">Attack</button>
+        <button id="btn-exit-battle" class="btn-battle btn-secondary">Run Away</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifications -->
+  <div id="notifications"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="assets/game.js"></script>
+</body>
+</html>

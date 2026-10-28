@@ -170,6 +170,26 @@ body {
   font-size: 16px;
 }
 
+.collection-progress {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rarity-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+  background: var(--gray);
+}
+
+.rarity-badge.collected {
+  background: var(--success);
+}
+
 .btn-secondary {
   padding: 12px 24px;
   font-size: 16px;
@@ -485,6 +505,34 @@ body {
   border-top: 1px solid var(--border);
 }
 
+.combo-display {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--danger) 100%);
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 800;
+  animation: pulse 0.5s ease-in-out infinite;
+}
+
+.combo-display #combo-count {
+  font-size: 24px;
+}
+
+.streak-display {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f97316 0%, #dc2626 100%);
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.streak-display #streak-count {
+  font-size: 20px;
+  font-weight: 800;
+}
+
 .hud-bottom {
   position: absolute;
   bottom: 30px;
@@ -712,6 +760,15 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
   }
 }
 

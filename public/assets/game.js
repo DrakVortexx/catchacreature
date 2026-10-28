@@ -19,7 +19,11 @@ const gameState = {
   activeCreature: null, // The creature currently held in inventory
   inBattle: false,
   battleState: null,
-  isFirstBattle: true
+  isFirstBattle: true,
+  particles: [],
+  combo: 0,
+  streak: 0,
+  lastCatchTime: 0
 };
 
 // Rarity colors
@@ -83,18 +87,35 @@ function initThreeJS() {
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
   gameState.scene.add(ambientLight);
 
-  // Ground (improved for top-down)
+  // Ground (improved for top-down with pattern)
   const groundGeometry = new THREE.PlaneGeometry(500, 500);
-  const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x2E8B57 });
+  const groundMaterial = new THREE.MeshStandardMaterial({
+    color: 0x3CB371,
+    roughness: 0.8
+  });
   const ground = new THREE.Mesh(groundGeometry, groundMaterial);
   ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
   gameState.scene.add(ground);
 
-  // Add grid pattern to ground for better visual reference
-  const gridHelper = new THREE.GridHelper(500, 50, 0x1E6B47, 0x1E6B47);
-  gridHelper.position.y = 0.01;
-  gameState.scene.add(gridHelper);
+  // Add checkerboard pattern
+  const checkerSize = 5;
+  const checkerCount = 100;
+  for (let x = -checkerCount; x < checkerCount; x++) {
+    for (let z = -checkerCount; z < checkerCount; z++) {
+      if ((x + z) % 2 === 0) {
+        const checkerGeometry = new THREE.PlaneGeometry(checkerSize, checkerSize);
+        const checkerMaterial = new THREE.MeshBasicMaterial({
+          color: 0x32CD32,
+          transparent: true,
+          opacity: 0.3
+        });
+        const checker = new THREE.Mesh(checkerGeometry, checkerMaterial);
+        checker.rotation.x = -Math.PI / 2;
+        checker.position.set(x * checkerSize, 0.01, z * checkerSize);
+        gameState.scene.add(checker);
+      }
+    }
+  }
 
   // Create lobby layout
   createLobbyLayout();
@@ -102,64 +123,92 @@ function initThreeJS() {
   // Create forest area (beyond lobby)
   createForest();
 
-  // Player (Top-down view character)
+  // Player (Improved top-down character)
   gameState.player = new THREE.Group();
 
-  // Body (visible from top)
-  const bodyGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.3, 32);
-  const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 });
+  // Body gradient effect with outer glow
+  const bodyGeometry = new THREE.CylinderGeometry(1, 1, 0.4, 32);
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4169E1,
+    emissive: 0x1a4a9e,
+    emissiveIntensity: 0.2
+  });
   const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-  body.position.y = 0.5;
-  body.castShadow = true;
+  body.position.y = 0.6;
   gameState.player.add(body);
 
-  // Shoulders/arms (visible from top)
-  const shoulderGeometry = new THREE.BoxGeometry(2.2, 0.2, 0.8);
-  const shoulderMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 });
-  const shoulders = new THREE.Mesh(shoulderGeometry, shoulderMaterial);
-  shoulders.position.y = 0.8;
-  shoulders.castShadow = true;
-  gameState.player.add(shoulders);
+  // Body ring for style
+  const ringGeometry = new THREE.RingGeometry(1.1, 1.3, 32);
+  const ringMaterial = new THREE.MeshBasicMaterial({
+    color: 0x6B93D6,
+    side: THREE.DoubleSide
+  });
+  const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.61;
+  gameState.player.add(ring);
 
-  // Arms (sticking out from shoulders)
-  const armGeometry = new THREE.BoxGeometry(0.6, 0.2, 0.6);
-  const armMaterial = new THREE.MeshStandardMaterial({ color: 0x3151B8 });
+  // Arms with better design
+  const armGeometry = new THREE.CylinderGeometry(0.3, 0.35, 0.8, 16);
+  const armMaterial = new THREE.MeshStandardMaterial({
+    color: 0x3151B8,
+    emissive: 0x1a2a6e,
+    emissiveIntensity: 0.2
+  });
   const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-  leftArm.position.set(-1.1, 0.8, 0);
-  leftArm.castShadow = true;
+  leftArm.position.set(-1.2, 0.8, 0);
+  leftArm.rotation.z = 0.3;
   gameState.player.add(leftArm);
 
   const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-  rightArm.position.set(1.1, 0.8, 0);
-  rightArm.castShadow = true;
+  rightArm.position.set(1.2, 0.8, 0);
+  rightArm.rotation.z = -0.3;
   gameState.player.add(rightArm);
 
-  // Head (visible from top)
-  const headGeometry = new THREE.CircleGeometry(0.5, 32);
+  // Hands
+  const handGeometry = new THREE.CircleGeometry(0.25, 16);
+  const handMaterial = new THREE.MeshStandardMaterial({ color: 0xFFCC99 });
+  const leftHand = new THREE.Mesh(handGeometry, handMaterial);
+  leftHand.rotation.x = -Math.PI / 2;
+  leftHand.position.set(-1.2, 0.8, 0.4);
+  gameState.player.add(leftHand);
+
+  const rightHand = new THREE.Mesh(handGeometry, handMaterial);
+  rightHand.rotation.x = -Math.PI / 2;
+  rightHand.position.set(1.2, 0.8, 0.4);
+  gameState.player.add(rightHand);
+
+  // Head with hair
+  const headGeometry = new THREE.CircleGeometry(0.6, 32);
   const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFCC99 });
   const head = new THREE.Mesh(headGeometry, headMaterial);
   head.rotation.x = -Math.PI / 2;
-  head.position.y = 1.1;
-  head.castShadow = true;
+  head.position.y = 1.2;
   gameState.player.add(head);
 
-  // Hair/style on head
-  const hairGeometry = new THREE.CircleGeometry(0.45, 32);
+  // Hair
+  const hairGeometry = new THREE.CircleGeometry(0.55, 32);
   const hairMaterial = new THREE.MeshStandardMaterial({ color: 0x4A3000 });
   const hair = new THREE.Mesh(hairGeometry, hairMaterial);
   hair.rotation.x = -Math.PI / 2;
-  hair.position.y = 1.12;
-  hair.castShadow = true;
+  hair.position.y = 1.22;
   gameState.player.add(hair);
 
-  // Direction indicator (shows which way player is facing)
-  const directionGeometry = new THREE.ConeGeometry(0.15, 0.4, 3);
-  const directionMaterial = new THREE.MeshStandardMaterial({ color: 0xFFD700 });
+  // Better direction indicator
+  const directionGeometry = new THREE.ConeGeometry(0.2, 0.5, 4);
+  const directionMaterial = new THREE.MeshBasicMaterial({
+    color: 0xFFD700,
+    transparent: true,
+    opacity: 0.9
+  });
   const direction = new THREE.Mesh(directionGeometry, directionMaterial);
   direction.rotation.x = -Math.PI / 2;
-  direction.position.set(0, 1.15, 0.6);
-  direction.castShadow = true;
+  direction.position.set(0, 1.25, 0.7);
   gameState.player.add(direction);
+
+  // Add bobbing animation reference
+  gameState.player.userData.bobOffset = 0;
+  gameState.player.userData.bobSpeed = 0.005;
 
   gameState.player.position.set(0, 0, 0);
   gameState.scene.add(gameState.player);
@@ -419,6 +468,51 @@ function createRock(x, z) {
   gameState.scene.add(rock);
 }
 
+// Particle system
+function createParticles(x, y, z, color, count = 20) {
+  for (let i = 0; i < count; i++) {
+    const geometry = new THREE.CircleGeometry(0.15, 8);
+    const material = new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 1
+    });
+    const particle = new THREE.Mesh(geometry, material);
+    particle.rotation.x = -Math.PI / 2;
+    particle.position.set(x, y, z);
+
+    particle.userData = {
+      velocity: new THREE.Vector3(
+        (Math.random() - 0.5) * 3,
+        Math.random() * 2 + 1,
+        (Math.random() - 0.5) * 3
+      ),
+      life: 1.0,
+      decay: 0.02 + Math.random() * 0.02
+    };
+
+    gameState.scene.add(particle);
+    gameState.particles.push(particle);
+  }
+}
+
+function updateParticles(delta) {
+  for (let i = gameState.particles.length - 1; i >= 0; i--) {
+    const particle = gameState.particles[i];
+    particle.userData.life -= particle.userData.decay;
+
+    if (particle.userData.life <= 0) {
+      gameState.scene.remove(particle);
+      gameState.particles.splice(i, 1);
+      continue;
+    }
+
+    particle.position.add(particle.userData.velocity.clone().multiplyScalar(delta));
+    particle.userData.velocity.y -= 9.8 * delta;
+    particle.material.opacity = particle.userData.life;
+  }
+}
+
 function onWindowResize() {
   const aspect = window.innerWidth / window.innerHeight;
   const viewSize = 30;
@@ -609,36 +703,69 @@ function createCreatureMesh(creatureData) {
 
   const color = rarityColors[creatureData.rarity] || 0x808080;
 
-  // Body (circular from top)
-  const bodyGeometry = new THREE.CylinderGeometry(1, 1, 0.5, 32);
-  const bodyMaterial = new THREE.MeshStandardMaterial({ color });
+  // Body with glow effect
+  const bodyGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.5, 32);
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    color: color,
+    emissive: color,
+    emissiveIntensity: 0.3,
+    roughness: 0.3
+  });
   const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
   body.position.y = 0.5;
-  body.castShadow = true;
   group.add(body);
 
-  // Top detail
-  const topGeometry = new THREE.CircleGeometry(1, 32);
-  const topMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.3 });
+  // Top detail with better design
+  const topGeometry = new THREE.CircleGeometry(1.2, 32);
+  const topMaterial = new THREE.MeshStandardMaterial({
+    color: color,
+    emissive: color,
+    emissiveIntensity: 0.5,
+    roughness: 0.2
+  });
   const top = new THREE.Mesh(topGeometry, topMaterial);
   top.rotation.x = -Math.PI / 2;
   top.position.y = 0.76;
-  top.castShadow = true;
   group.add(top);
 
-  // Add glow effect for rare+ creatures
+  // Inner pattern
+  const innerGeometry = new THREE.CircleGeometry(0.7, 32);
+  const innerMaterial = new THREE.MeshBasicMaterial({
+    color: 0xFFFFFF,
+    transparent: true,
+    opacity: 0.3
+  });
+  const inner = new THREE.Mesh(innerGeometry, innerMaterial);
+  inner.rotation.x = -Math.PI / 2;
+  inner.position.y = 0.77;
+  group.add(inner);
+
+  // Glow ring for all creatures
+  const glowGeometry = new THREE.RingGeometry(1.3, 1.6, 32);
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: color,
+    transparent: true,
+    opacity: 0.4,
+    side: THREE.DoubleSide
+  });
+  const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.y = 0.8;
+  group.add(glow);
+
+  // Extra glow for rare+ creatures
   if (['legendary', 'mythic', 'divine', 'celestial', 'eternal', 'omniversal'].includes(creatureData.rarity)) {
-    const glowGeometry = new THREE.RingGeometry(1.1, 1.5, 32);
-    const glowMaterial = new THREE.MeshBasicMaterial({
-      color,
+    const outerGlowGeometry = new THREE.RingGeometry(1.7, 2.0, 32);
+    const outerGlowMaterial = new THREE.MeshBasicMaterial({
+      color: color,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.2,
       side: THREE.DoubleSide
     });
-    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.rotation.x = -Math.PI / 2;
-    glow.position.y = 0.8;
-    group.add(glow);
+    const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
+    outerGlow.rotation.x = -Math.PI / 2;
+    outerGlow.position.y = 0.8;
+    group.add(outerGlow);
   }
 
   return group;
@@ -762,6 +889,16 @@ function enemyAttack() {
 async function winBattle() {
   const battle = gameState.battleState;
 
+  // Create catch particles
+  const color = rarityColors[battle.enemyCreature.rarity] || 0xFFFFFF;
+  createParticles(
+    battle.battleMesh.position.x,
+    battle.battleMesh.position.y + 1,
+    battle.battleMesh.position.z,
+    color,
+    30
+  );
+
   // Remove creature from world
   gameState.scene.remove(battle.battleMesh);
   const index = gameState.creaturesInWorld.indexOf(battle.battleMesh);
@@ -774,6 +911,17 @@ async function winBattle() {
     ...battle.enemyCreature,
     currentHp: battle.enemyCreature.hp
   };
+
+  // Update combo/streak
+  const now = Date.now();
+  if (now - gameState.lastCatchTime < 30000) { // Within 30 seconds
+    gameState.combo++;
+    gameState.streak++;
+  } else {
+    gameState.combo = 1;
+    gameState.streak = 1;
+  }
+  gameState.lastCatchTime = now;
 
   // Save to server
   await fetch('/api/creatures/catch', {
@@ -792,10 +940,16 @@ async function winBattle() {
 
   gameState.isFirstBattle = false;
   endBattle();
-  showNotification(`You won! You now have ${battle.enemyCreature.name}!`, 'success');
+
+  const comboText = gameState.combo > 1 ? ` ${gameState.combo}x COMBO!` : '';
+  showNotification(`You won! You now have ${battle.enemyCreature.name}!${comboText}`, 'success');
 }
 
 function loseBattle() {
+  // Reset combo on loss
+  gameState.combo = 0;
+  gameState.streak = 0;
+
   // Player's creature faints, heal it
   gameState.battleState.playerCreature.currentHp = gameState.battleState.playerCreature.hp;
   gameState.activeCreature.currentHp = gameState.activeCreature.hp;
@@ -842,6 +996,21 @@ function animate() {
   lastTime = time;
 
   updatePlayerMovement(delta);
+
+  // Player bobbing animation
+  if (gameState.player) {
+    gameState.player.userData.bobOffset += gameState.player.userData.bobSpeed;
+    gameState.player.position.y = Math.sin(gameState.player.userData.bobOffset) * 0.1;
+  }
+
+  // Creature pulsing animations
+  gameState.creaturesInWorld.forEach(creature => {
+    const pulse = Math.sin(time * 0.003) * 0.1 + 1;
+    creature.scale.set(pulse, pulse, pulse);
+  });
+
+  // Update particles
+  updateParticles(delta);
 
   // Spawn creatures periodically
   spawnTimer += delta;
@@ -929,6 +1098,7 @@ async function autoLogin() {
       await loadUserCreatures();
       const creatures = await loadUserCreatures();
       document.getElementById('dashboard-stats').textContent = `${creatures.length} Creatures Collected`;
+      updateCollectionProgress(creatures);
       showNotification(`Welcome back, ${savedUsername}!`, 'success');
       return true;
     }
@@ -1116,6 +1286,9 @@ function addChatMessage(username, message) {
 
 function updateActiveCreatureInfo() {
   const infoDiv = document.getElementById('active-creature-info');
+  const comboDisplay = document.getElementById('combo-display');
+  const streakDisplay = document.getElementById('streak-display');
+
   if (gameState.activeCreature) {
     infoDiv.innerHTML = `
       <p style="color: #FFD700; margin-top: 10px;">Active Creature:</p>
@@ -1125,6 +1298,28 @@ function updateActiveCreatureInfo() {
   } else {
     infoDiv.innerHTML = '<p style="color: #FFD700; margin-top: 10px;">No active creature</p>';
   }
+
+  // Update combo display
+  if (gameState.combo > 1) {
+    comboDisplay.classList.remove('hidden');
+    document.getElementById('combo-count').textContent = gameState.combo;
+  } else {
+    comboDisplay.classList.add('hidden');
+  }
+
+  // Update streak display
+  document.getElementById('streak-count').textContent = gameState.streak;
+}
+
+function updateCollectionProgress(userCreatures) {
+  const rarities = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'divine', 'celestial', 'eternal', 'omniversal'];
+  const collectedRarities = new Set(userCreatures.map(uc => uc.creature.rarity));
+
+  const progressDiv = document.getElementById('collection-progress');
+  progressDiv.innerHTML = rarities.map(rarity => {
+    const isCollected = collectedRarities.has(rarity);
+    return `<span class="rarity-badge ${isCollected ? 'collected' : ''}">${rarity}</span>`;
+  }).join('');
 }
 
 function storeCreatureInPen() {
@@ -1222,6 +1417,7 @@ async function init() {
         await loadUserCreatures();
         const creatures = await loadUserCreatures();
         document.getElementById('dashboard-stats').textContent = `${creatures.length} Creatures Collected`;
+        updateCollectionProgress(creatures);
         showNotification(`Welcome, ${username}!`, 'success');
       }
     }

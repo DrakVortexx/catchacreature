@@ -37,6 +37,7 @@
         <div class="user-info">
           <h2 id="dashboard-username">Player</h2>
           <p id="dashboard-stats">0 Creatures Collected</p>
+          <div id="collection-progress" class="collection-progress"></div>
         </div>
         <button id="btn-logout" class="btn-secondary">Logout</button>
       </header>
@@ -137,12 +138,18 @@
       <div class="hud-panel">
         <h3 id="hud-username">Player</h3>
         <div id="active-creature-info" class="creature-hud"></div>
+        <div id="combo-display" class="combo-display hidden">
+          <span id="combo-count">0</span>x COMBO!
+        </div>
       </div>
     </div>
     <div class="hud-right">
       <div class="hud-panel">
         <h3 id="hud-lobby">Lobby 1</h3>
         <p id="hud-players">1/8 Players</p>
+        <div id="streak-display" class="streak-display">
+          🔥 <span id="streak-count">0</span> Streak
+        </div>
       </div>
     </div>
     <div class="hud-bottom">
