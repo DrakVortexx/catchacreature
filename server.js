@@ -56,7 +56,7 @@ for (let i = 0; i < MAX_LOBBIES; i++) {
   db.lobbies.set(lobbyId, {
     id: lobbyId,
     name: `Lobby ${i + 1}`,
-    max_players: 20,
+    max_players: 8,
     current_players: 0,
     status: 'active',
     players: new Map()

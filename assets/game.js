@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
 // Game State
 const gameState = {
@@ -60,18 +59,15 @@ function initThreeJS() {
   gameState.scene.background = new THREE.Color(0x87CEEB);
   gameState.scene.fog = new THREE.Fog(0x87CEEB, 50, 200);
 
-  // Camera
+  // Camera (Third-person)
   gameState.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  gameState.camera.position.set(0, 2, 0);
+  gameState.camera.position.set(0, 5, 10);
 
   // Renderer
   gameState.renderer = new THREE.WebGLRenderer({ antialias: true });
   gameState.renderer.setSize(window.innerWidth, window.innerHeight);
   gameState.renderer.shadowMap.enabled = true;
   container.appendChild(gameState.renderer.domElement);
-
-  // Controls
-  gameState.controls = new PointerLockControls(gameState.camera, document.body);
 
   // Lighting
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -96,26 +92,60 @@ function initThreeJS() {
   // Create forest area (beyond lobby)
   createForest();
 
-  // Player
+  // Player (Roblox-style blocky character)
   gameState.player = new THREE.Group();
-  const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
-  const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x0000FF });
-  const playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
-  playerMesh.position.y = 1;
-  gameState.player.add(playerMesh);
+
+  // Body
+  const bodyGeometry = new THREE.BoxGeometry(1, 1.5, 0.5);
+  const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x0000FF });
+  const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+  body.position.y = 1.5;
+  body.castShadow = true;
+  gameState.player.add(body);
+
+  // Head
+  const headGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+  const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFCC99 });
+  const head = new THREE.Mesh(headGeometry, headMaterial);
+  head.position.y = 2.8;
+  head.castShadow = true;
+  gameState.player.add(head);
+
+  // Arms
+  const armGeometry = new THREE.BoxGeometry(0.3, 1, 0.3);
+  const armMaterial = new THREE.MeshStandardMaterial({ color: 0x0000FF });
+  const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+  leftArm.position.set(-0.7, 1.5, 0);
+  leftArm.castShadow = true;
+  gameState.player.add(leftArm);
+
+  const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+  rightArm.position.set(0.7, 1.5, 0);
+  rightArm.castShadow = true;
+  gameState.player.add(rightArm);
+
+  // Legs
+  const legGeometry = new THREE.BoxGeometry(0.3, 1, 0.3);
+  const legMaterial = new THREE.MeshStandardMaterial({ color: 0x0000AA });
+  const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+  leftLeg.position.set(-0.25, 0.5, 0);
+  leftLeg.castShadow = true;
+  gameState.player.add(leftLeg);
+
+  const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+  rightLeg.position.set(0.25, 0.5, 0);
+  rightLeg.castShadow = true;
+  gameState.player.add(rightLeg);
+
+  gameState.player.position.set(0, 0, 0);
   gameState.scene.add(gameState.player);
+
+  // Camera offset for third-person (behind player)
+  gameState.cameraOffset = new THREE.Vector3(0, 6, 12);
+  gameState.cameraLookAt = new THREE.Vector3();
 
   // Handle window resize
   window.addEventListener('resize', onWindowResize);
-
-  // Handle pointer lock
-  gameState.controls.addEventListener('lock', () => {
-    gameState.isGameRunning = true;
-  });
-
-  gameState.controls.addEventListener('unlock', () => {
-    gameState.isGameRunning = false;
-  });
 
   // Start animation loop
   animate();
@@ -378,6 +408,11 @@ const moveState = {
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
 
+// Camera rotation
+let isRightMouseDown = false;
+let cameraRotationX = 0;
+let cameraRotationY = 0;
+
 function setupControls() {
   document.addEventListener('keydown', (event) => {
     switch (event.code) {
@@ -398,7 +433,7 @@ function setupControls() {
         moveState.right = true;
         break;
       case 'Space':
-        if (gameState.player.position.y <= 2) {
+        if (gameState.player.position.y <= 0) {
           velocity.y = 10;
         }
         break;
@@ -436,6 +471,32 @@ function setupControls() {
         break;
     }
   });
+
+  // Right-click to look around
+  document.addEventListener('mousedown', (event) => {
+    if (event.button === 2) {
+      isRightMouseDown = true;
+    }
+  });
+
+  document.addEventListener('mouseup', (event) => {
+    if (event.button === 2) {
+      isRightMouseDown = false;
+    }
+  });
+
+  document.addEventListener('mousemove', (event) => {
+    if (isRightMouseDown && gameState.isGameRunning) {
+      cameraRotationY -= event.movementX * 0.002;
+      cameraRotationX -= event.movementY * 0.002;
+      cameraRotationX = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraRotationX));
+    }
+  });
+
+  // Prevent context menu on right-click
+  document.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+  });
 }
 
 function updatePlayerMovement(delta) {
@@ -456,16 +517,41 @@ function updatePlayerMovement(delta) {
     velocity.x -= direction.x * 100.0 * delta;
   }
 
-  gameState.controls.moveRight(-velocity.x * delta);
-  gameState.controls.moveForward(-velocity.z * delta);
+  // Rotate player to face camera direction
+  gameState.player.rotation.y = cameraRotationY;
 
-  gameState.player.position.copy(gameState.camera.position);
+  // Calculate movement direction based on player's facing direction
+  const moveX = (moveState.right ? 1 : 0) - (moveState.left ? 1 : 0);
+  const moveZ = (moveState.backward ? 1 : 0) - (moveState.forward ? 1 : 0);
+
+  if (moveX !== 0 || moveZ !== 0) {
+    const moveAngle = Math.atan2(moveX, moveZ);
+    const finalAngle = gameState.player.rotation.y + moveAngle;
+
+    const speed = 10;
+    gameState.player.position.x += Math.sin(finalAngle) * speed * delta;
+    gameState.player.position.z += Math.cos(finalAngle) * speed * delta;
+  }
+
   gameState.player.position.y = Math.max(1, gameState.player.position.y + velocity.y * delta);
 
   if (gameState.player.position.y <= 1) {
     velocity.y = 0;
     gameState.player.position.y = 1;
   }
+
+  // Update camera to follow player
+  const cameraOffsetX = Math.sin(cameraRotationY) * gameState.cameraOffset.z;
+  const cameraOffsetZ = Math.cos(cameraRotationY) * gameState.cameraOffset.z;
+
+  gameState.camera.position.x = gameState.player.position.x - cameraOffsetX;
+  gameState.camera.position.z = gameState.player.position.z - cameraOffsetZ;
+  gameState.camera.position.y = gameState.player.position.y + gameState.cameraOffset.x;
+
+  // Camera looks at player with vertical offset
+  gameState.cameraLookAt.copy(gameState.player.position);
+  gameState.cameraLookAt.y += 2;
+  gameState.camera.lookAt(gameState.cameraLookAt);
 
   // Send position to server
   if (gameState.socket && gameState.currentLobby) {
@@ -628,7 +714,6 @@ function startBattle(creatureMesh) {
 
   // Show battle UI
   showBattleUI();
-  gameState.controls.unlock();
 }
 
 function showBattleUI() {
@@ -755,7 +840,6 @@ function endBattle() {
 
   showScreen('game-hud');
   document.getElementById('game-hud').classList.remove('hidden');
-  gameState.controls.lock();
 }
 
 function updateBattleUI() {
@@ -1124,7 +1208,6 @@ async function init() {
 
     showScreen('game-hud');
     updateActiveCreatureInfo();
-    gameState.controls.lock();
   });
 
   document.getElementById('btn-servers').addEventListener('click', () => {
@@ -1163,7 +1246,6 @@ async function init() {
   });
 
   document.getElementById('btn-menu').addEventListener('click', () => {
-    gameState.controls.unlock();
     document.getElementById('game-hud').classList.add('hidden');
     showScreen('dashboard');
   });
