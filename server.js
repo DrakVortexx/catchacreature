@@ -6,6 +6,15 @@ const path     = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
 // ── Supabase ─────────────────────────────────────────────
+if (!process.env.SUPABASE_URL || process.env.SUPABASE_URL === 'your_supabase_project_url') {
+  console.error('❌  SUPABASE_URL is not set in .env');
+  process.exit(1);
+}
+if (!process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY === 'your_supabase_anon_key') {
+  console.error('❌  SUPABASE_ANON_KEY is not set in .env');
+  process.exit(1);
+}
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
