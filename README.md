@@ -1,7 +1,7 @@
 # Catch a Creature - Complete Game Specification
 
 ## Game Overview
-A 3D multiplayer creature battle game where players start with a starter creature, explore a forest to fight wild creatures, and collect them in pens. The game features Roblox-style blocky 3D graphics using Three.js.
+A 2D multiplayer creature battle game where players start with a starter creature, explore a forest to fight wild creatures, and collect them in pens. The game features Roblox-style blocky 2D graphics using Three.js.
 
 ## Gameplay Loop
 1. **Start with Lucas da Vucas** (common starter creature)
@@ -15,7 +15,7 @@ A 3D multiplayer creature battle game where players start with a starter creatur
 ## Technical Stack
 
 ### Frontend
-- **3D Engine**: Three.js (Roblox-style blocky graphics)
+- **2D Engine**: Three.js (Roblox-style blocky graphics)
 - **Communication**: Socket.io client
 - **Styling**: CSS3
 - **Build**: No build tool required (vanilla JS)
@@ -45,7 +45,7 @@ A 3D multiplayer creature battle game where players start with a starter creatur
 
 ## Core Features
 
-### 1. 3D World System
+### 1. 2D World System
 
 #### World Layout
 - **Lobby Area** (center):
@@ -56,7 +56,7 @@ A 3D multiplayer creature battle game where players start with a starter creatur
   - **Pathways** connecting all areas
 
 - **Forest Area** (beyond lobby, z < -100):
-  - Large 3D environment where creatures spawn
+  - Large 2D environment where creatures spawn
   - Players can walk/move through the forest
   - Deeper areas = rarer creatures
   - Roblox-style blocky graphics (voxel-like aesthetic)
@@ -166,7 +166,7 @@ Each rarity has:
 #### Lobby Features
 - See other players in same room
 - Chat system (text chat)
-- Player location in 3D world (see other players moving)
+- Player location in 2D world (see other players moving)
 
 ### 5. User Account System
 
@@ -311,7 +311,7 @@ CREATE TABLE lobby_players (
   - Emit: `{ lobbyId, userId }`
   - Broadcast to lobby: `{ type: 'player_left', userId }`
 
-- `player_move` - Player moves in 3D world
+- `player_move` - Player moves in 2D world
   - Emit: `{ lobbyId, userId, position: {x, y, z} }`
   - Broadcast to lobby: `{ type: 'player_moved', userId, position }`
 
@@ -442,7 +442,7 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 ### 11. Testing Checklist
 
 #### Core Features
-- [ ] Player can move in 3D world
+- [ ] Player can move in 2D world
 - [ ] Lucas da Vucas given as starter
 - [ ] Creatures spawn in forest
 - [ ] Player can fight creatures (E key)
@@ -496,9 +496,9 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 
 ## Summary for AI Implementation
 
-This is a complete specification for a 3D multiplayer creature battle game. Key points:
+This is a complete specification for a 2D multiplayer creature battle game. Key points:
 
-1. **Use Three.js** for Roblox-style 3D graphics
+1. **Use Three.js** for Roblox-style 2D graphics
 2. **Battle system**: Press E to fight, turn-based combat, win to get creature
 3. **Starter creature**: Lucas da Vucas (common)
 4. **Inventory**: Hold 1 creature at a time, store in pens
@@ -510,4 +510,4 @@ This is a complete specification for a 3D multiplayer creature battle game. Key 
 10. **Full API endpoints** documented
 11. **Socket.io events** specified
 
-Build in phases, starting with core 3D mechanics, then multiplayer, then database integration.
+Build in phases, starting with core 2D mechanics, then multiplayer, then database integration.
