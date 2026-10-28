@@ -633,7 +633,6 @@ function startBattle(creatureMesh) {
 
 function showBattleUI() {
   const battle = gameState.battleState;
-  const battleUI = document.getElementById('battle-ui');
 
   document.getElementById('player1-creatures').innerHTML = `
     <h3>${battle.playerCreature.name}</h3>
@@ -649,7 +648,7 @@ function showBattleUI() {
     <p>Defense: ${battle.enemyCreature.defense}</p>
   `;
 
-  battleUI.classList.remove('hidden');
+  showScreen('battle-ui');
   document.getElementById('game-hud').classList.add('hidden');
 }
 
@@ -755,7 +754,7 @@ function endBattle() {
   gameState.inBattle = false;
   gameState.battleState = null;
 
-  document.getElementById('battle-ui').classList.add('hidden');
+  showScreen('game-hud');
   document.getElementById('game-hud').classList.remove('hidden');
   gameState.controls.lock();
 }
@@ -975,9 +974,9 @@ function setupSocket() {
 }
 
 // UI Functions
-function showMenu(menuId) {
-  document.querySelectorAll('.menu').forEach(menu => menu.classList.add('hidden'));
-  document.getElementById(menuId).classList.remove('hidden');
+function showScreen(screenId) {
+  document.querySelectorAll('.screen').forEach(screen => screen.classList.add('hidden'));
+  document.getElementById(screenId).classList.remove('hidden');
 }
 
 function showNotification(message, type = 'info') {
@@ -1088,17 +1087,20 @@ async function init() {
   await loadCreatures();
 
   // Setup UI event listeners
-  document.getElementById('btn-login').addEventListener('click', async () => {
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
     const username = document.getElementById('username-input').value.trim();
     const password = document.getElementById('password-input').value.trim();
     if (username && password) {
       const result = await login(username, password);
       if (result) {
-        document.getElementById('login-section').classList.add('hidden');
+        showScreen('dashboard');
+        document.getElementById('dashboard-username').textContent = username;
+        await loadUserCreatures();
+        const creatures = await loadUserCreatures();
+        document.getElementById('dashboard-stats').textContent = `${creatures.length} Creatures Collected`;
         showNotification(`Welcome, ${username}!`, 'success');
       }
-    } else {
-      showNotification('Please enter username and password', 'error');
     }
   });
 
@@ -1121,7 +1123,7 @@ async function init() {
       });
     }
 
-    document.getElementById('main-menu').classList.add('hidden');
+    showScreen('game-hud');
     document.getElementById('game-hud').classList.remove('hidden');
     updateActiveCreatureInfo();
     gameState.controls.lock();
@@ -1129,34 +1131,43 @@ async function init() {
 
   document.getElementById('btn-servers').addEventListener('click', () => {
     renderLobbyList();
-    showMenu('server-browser');
+    showScreen('server-browser');
   });
 
   document.getElementById('btn-collection').addEventListener('click', async () => {
     await renderCollection();
-    showMenu('collection-view');
+    showScreen('collection-view');
   });
 
   document.getElementById('btn-settings').addEventListener('click', () => {
-    showMenu('settings');
+    showScreen('settings');
   });
 
-  document.getElementById('btn-back').addEventListener('click', () => {
-    showMenu('main-menu');
+  document.getElementById('btn-close-servers').addEventListener('click', () => {
+    showScreen('dashboard');
   });
 
-  document.getElementById('btn-back-collection').addEventListener('click', () => {
-    showMenu('main-menu');
+  document.getElementById('btn-close-collection').addEventListener('click', () => {
+    showScreen('dashboard');
   });
 
-  document.getElementById('btn-back-settings').addEventListener('click', () => {
-    showMenu('main-menu');
+  document.getElementById('btn-close-settings').addEventListener('click', () => {
+    showScreen('dashboard');
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', () => {
+    gameState.userId = null;
+    gameState.username = null;
+    gameState.activeCreature = null;
+    showScreen('login-screen');
+    document.getElementById('username-input').value = '';
+    document.getElementById('password-input').value = '';
   });
 
   document.getElementById('btn-menu').addEventListener('click', () => {
     gameState.controls.unlock();
     document.getElementById('game-hud').classList.add('hidden');
-    showMenu('main-menu');
+    showScreen('dashboard');
   });
 
   document.getElementById('btn-catch').addEventListener('click', () => {

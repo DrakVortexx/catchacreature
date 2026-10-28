@@ -45,7 +45,7 @@ db.creatures = [
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/assets', express.static(path.join(__dirname, 'assets')));
+app.use(express.static(path.join(__dirname)));
 
 // In-memory lobby management (8 rooms max)
 const MAX_LOBBIES = 8;
