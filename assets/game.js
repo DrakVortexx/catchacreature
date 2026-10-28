@@ -57,12 +57,22 @@ function initThreeJS() {
   // Scene
   gameState.scene = new THREE.Scene();
   gameState.scene.background = new THREE.Color(0x87CEEB);
-  gameState.scene.fog = new THREE.Fog(0x87CEEB, 50, 200);
 
-  // Camera (Top-down view)
-  gameState.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+  // Camera (Orthographic for true 2D top-down view)
+  const aspect = window.innerWidth / window.innerHeight;
+  const viewSize = 40;
+  gameState.camera = new THREE.OrthographicCamera(
+    -viewSize * aspect / 2,
+    viewSize * aspect / 2,
+    viewSize / 2,
+    -viewSize / 2,
+    0.1,
+    1000
+  );
   gameState.camera.position.set(0, 50, 0);
   gameState.camera.lookAt(0, 0, 0);
+  gameState.camera.zoom = 1;
+  gameState.camera.updateProjectionMatrix();
 
   // Renderer
   gameState.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -416,8 +426,15 @@ function createRock(x, z) {
 }
 
 function onWindowResize() {
-  gameState.camera.aspect = window.innerWidth / window.innerHeight;
+  const aspect = window.innerWidth / window.innerHeight;
+  const viewSize = 40;
+
+  gameState.camera.left = -viewSize * aspect / 2;
+  gameState.camera.right = viewSize * aspect / 2;
+  gameState.camera.top = viewSize / 2;
+  gameState.camera.bottom = -viewSize / 2;
   gameState.camera.updateProjectionMatrix();
+
   gameState.renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
@@ -524,7 +541,7 @@ function updatePlayerMovement(delta) {
   // Update camera to follow player (top-down)
   gameState.camera.position.x = gameState.player.position.x;
   gameState.camera.position.z = gameState.player.position.z;
-  gameState.camera.lookAt(gameState.player.position);
+  gameState.camera.lookAt(gameState.player.position.x, 0, gameState.player.position.z);
 
   // Send position to server
   if (gameState.socket && gameState.currentLobby) {
