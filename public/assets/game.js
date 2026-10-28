@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
 // Game State
 const gameState = {
@@ -58,37 +57,44 @@ function initThreeJS() {
   // Scene
   gameState.scene = new THREE.Scene();
   gameState.scene.background = new THREE.Color(0x87CEEB);
-  gameState.scene.fog = new THREE.Fog(0x87CEEB, 50, 200);
 
-  // Camera
-  gameState.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  gameState.camera.position.set(0, 2, 0);
+  // Camera (Completely flat 2D top-down view)
+  const aspect = window.innerWidth / window.innerHeight;
+  const viewSize = 30;
+  gameState.camera = new THREE.OrthographicCamera(
+    -viewSize * aspect / 2,
+    viewSize * aspect / 2,
+    viewSize / 2,
+    -viewSize / 2,
+    0.1,
+    1000
+  );
+  gameState.camera.position.set(0, 50, 0);
+  gameState.camera.lookAt(0, 0, 0);
+  gameState.camera.zoom = 1;
+  gameState.camera.updateProjectionMatrix();
 
   // Renderer
   gameState.renderer = new THREE.WebGLRenderer({ antialias: true });
   gameState.renderer.setSize(window.innerWidth, window.innerHeight);
-  gameState.renderer.shadowMap.enabled = true;
   container.appendChild(gameState.renderer.domElement);
 
-  // Controls
-  gameState.controls = new PointerLockControls(gameState.camera, document.body);
-
   // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
   gameState.scene.add(ambientLight);
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(50, 100, 50);
-  directionalLight.castShadow = true;
-  gameState.scene.add(directionalLight);
-
-  // Ground
+  // Ground (improved for top-down)
   const groundGeometry = new THREE.PlaneGeometry(500, 500);
-  const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+  const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x2E8B57 });
   const ground = new THREE.Mesh(groundGeometry, groundMaterial);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   gameState.scene.add(ground);
+
+  // Add grid pattern to ground for better visual reference
+  const gridHelper = new THREE.GridHelper(500, 50, 0x1E6B47, 0x1E6B47);
+  gridHelper.position.y = 0.01;
+  gameState.scene.add(gridHelper);
 
   // Create lobby layout
   createLobbyLayout();
@@ -96,26 +102,70 @@ function initThreeJS() {
   // Create forest area (beyond lobby)
   createForest();
 
-  // Player
+  // Player (Top-down view character)
   gameState.player = new THREE.Group();
-  const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
-  const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x0000FF });
-  const playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
-  playerMesh.position.y = 1;
-  gameState.player.add(playerMesh);
+
+  // Body (visible from top)
+  const bodyGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.3, 32);
+  const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 });
+  const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+  body.position.y = 0.5;
+  body.castShadow = true;
+  gameState.player.add(body);
+
+  // Shoulders/arms (visible from top)
+  const shoulderGeometry = new THREE.BoxGeometry(2.2, 0.2, 0.8);
+  const shoulderMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 });
+  const shoulders = new THREE.Mesh(shoulderGeometry, shoulderMaterial);
+  shoulders.position.y = 0.8;
+  shoulders.castShadow = true;
+  gameState.player.add(shoulders);
+
+  // Arms (sticking out from shoulders)
+  const armGeometry = new THREE.BoxGeometry(0.6, 0.2, 0.6);
+  const armMaterial = new THREE.MeshStandardMaterial({ color: 0x3151B8 });
+  const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+  leftArm.position.set(-1.1, 0.8, 0);
+  leftArm.castShadow = true;
+  gameState.player.add(leftArm);
+
+  const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+  rightArm.position.set(1.1, 0.8, 0);
+  rightArm.castShadow = true;
+  gameState.player.add(rightArm);
+
+  // Head (visible from top)
+  const headGeometry = new THREE.CircleGeometry(0.5, 32);
+  const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFCC99 });
+  const head = new THREE.Mesh(headGeometry, headMaterial);
+  head.rotation.x = -Math.PI / 2;
+  head.position.y = 1.1;
+  head.castShadow = true;
+  gameState.player.add(head);
+
+  // Hair/style on head
+  const hairGeometry = new THREE.CircleGeometry(0.45, 32);
+  const hairMaterial = new THREE.MeshStandardMaterial({ color: 0x4A3000 });
+  const hair = new THREE.Mesh(hairGeometry, hairMaterial);
+  hair.rotation.x = -Math.PI / 2;
+  hair.position.y = 1.12;
+  hair.castShadow = true;
+  gameState.player.add(hair);
+
+  // Direction indicator (shows which way player is facing)
+  const directionGeometry = new THREE.ConeGeometry(0.15, 0.4, 3);
+  const directionMaterial = new THREE.MeshStandardMaterial({ color: 0xFFD700 });
+  const direction = new THREE.Mesh(directionGeometry, directionMaterial);
+  direction.rotation.x = -Math.PI / 2;
+  direction.position.set(0, 1.15, 0.6);
+  direction.castShadow = true;
+  gameState.player.add(direction);
+
+  gameState.player.position.set(0, 0, 0);
   gameState.scene.add(gameState.player);
 
   // Handle window resize
   window.addEventListener('resize', onWindowResize);
-
-  // Handle pointer lock
-  gameState.controls.addEventListener('lock', () => {
-    gameState.isGameRunning = true;
-  });
-
-  gameState.controls.addEventListener('unlock', () => {
-    gameState.isGameRunning = false;
-  });
 
   // Start animation loop
   animate();
@@ -330,21 +380,30 @@ function createForest() {
 function createTree(x, z) {
   const tree = new THREE.Group();
 
-  // Trunk
-  const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 4, 8);
+  // Trunk (visible from top as circle)
+  const trunkGeometry = new THREE.CylinderGeometry(0.6, 0.7, 3, 16);
   const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
   const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-  trunk.position.y = 2;
+  trunk.position.y = 1.5;
   trunk.castShadow = true;
   tree.add(trunk);
 
-  // Foliage (blocky style)
-  const foliageGeometry = new THREE.BoxGeometry(3, 4, 3);
+  // Foliage (circular canopy from top)
+  const foliageGeometry = new THREE.CylinderGeometry(2.5, 2.8, 2, 32);
   const foliageMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
   const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
-  foliage.position.y = 6;
+  foliage.position.y = 4;
   foliage.castShadow = true;
   tree.add(foliage);
+
+  // Top foliage detail
+  const topFoliageGeometry = new THREE.CircleGeometry(2.8, 32);
+  const topFoliageMaterial = new THREE.MeshStandardMaterial({ color: 0x32CD32 });
+  const topFoliage = new THREE.Mesh(topFoliageGeometry, topFoliageMaterial);
+  topFoliage.rotation.x = -Math.PI / 2;
+  topFoliage.position.y = 5.1;
+  topFoliage.castShadow = true;
+  tree.add(topFoliage);
 
   tree.position.set(x, 0, z);
   gameState.scene.add(tree);
@@ -361,8 +420,15 @@ function createRock(x, z) {
 }
 
 function onWindowResize() {
-  gameState.camera.aspect = window.innerWidth / window.innerHeight;
+  const aspect = window.innerWidth / window.innerHeight;
+  const viewSize = 30;
+
+  gameState.camera.left = -viewSize * aspect / 2;
+  gameState.camera.right = viewSize * aspect / 2;
+  gameState.camera.top = viewSize / 2;
+  gameState.camera.bottom = -viewSize / 2;
   gameState.camera.updateProjectionMatrix();
+
   gameState.renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
@@ -377,6 +443,9 @@ const moveState = {
 
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
+
+// Player rotation (for facing direction)
+let playerRotation = 0;
 
 function setupControls() {
   document.addEventListener('keydown', (event) => {
@@ -398,7 +467,7 @@ function setupControls() {
         moveState.right = true;
         break;
       case 'Space':
-        if (gameState.player.position.y <= 2) {
+        if (gameState.player.position.y <= 0) {
           velocity.y = 10;
         }
         break;
@@ -443,29 +512,30 @@ function updatePlayerMovement(delta) {
 
   velocity.x -= velocity.x * 10.0 * delta;
   velocity.z -= velocity.z * 10.0 * delta;
-  velocity.y -= 9.8 * 2.0 * delta;
 
   direction.z = Number(moveState.forward) - Number(moveState.backward);
   direction.x = Number(moveState.right) - Number(moveState.left);
   direction.normalize();
 
+  const speed = 12;
+
   if (moveState.forward || moveState.backward) {
-    velocity.z -= direction.z * 100.0 * delta;
+    gameState.player.position.z -= direction.z * speed * delta;
   }
   if (moveState.left || moveState.right) {
-    velocity.x -= direction.x * 100.0 * delta;
+    gameState.player.position.x -= direction.x * speed * delta;
   }
 
-  gameState.controls.moveRight(-velocity.x * delta);
-  gameState.controls.moveForward(-velocity.z * delta);
-
-  gameState.player.position.copy(gameState.camera.position);
-  gameState.player.position.y = Math.max(1, gameState.player.position.y + velocity.y * delta);
-
-  if (gameState.player.position.y <= 1) {
-    velocity.y = 0;
-    gameState.player.position.y = 1;
+  // Rotate player to face movement direction
+  if (moveState.forward || moveState.backward || moveState.left || moveState.right) {
+    const moveAngle = Math.atan2(direction.x, direction.z);
+    gameState.player.rotation.y = moveAngle;
   }
+
+  // Update camera to follow player (flat 2D top-down)
+  gameState.camera.position.x = gameState.player.position.x;
+  gameState.camera.position.z = gameState.player.position.z;
+  gameState.camera.lookAt(gameState.player.position.x, 0, gameState.player.position.z);
 
   // Send position to server
   if (gameState.socket && gameState.currentLobby) {
@@ -485,41 +555,14 @@ function updatePlayerMovement(delta) {
 function spawnCreature() {
   if (!gameState.isGameRunning) return;
 
-  // Only spawn in forest area (z < -100)
-  if (gameState.player.position.z > -100) return;
-
-  // Calculate depth based on z position (deeper = more negative z)
-  const depth = Math.abs(gameState.player.position.z + 150);
-  const maxDepth = 250;
-
-  // Adjust spawn rates based on depth
-  let adjustedRates = { ...spawnRates };
-  if (depth > 50) {
-    adjustedRates.common *= 0.5;
-    adjustedRates.uncommon *= 0.8;
-    adjustedRates.rare *= 1.2;
-  }
-  if (depth > 100) {
-    adjustedRates.epic *= 1.5;
-    adjustedRates.legendary *= 2;
-  }
-  if (depth > 150) {
-    adjustedRates.mythic *= 2;
-    adjustedRates.divine *= 3;
-  }
-  if (depth > 180) {
-    adjustedRates.celestial *= 3;
-    adjustedRates.eternal *= 5;
-    adjustedRates.omniversal *= 10;
-  }
-
   // Normalize rates
-  const totalRate = Object.values(adjustedRates).reduce((a, b) => a + b, 0);
-  for (const rarity in adjustedRates) {
-    adjustedRates[rarity] /= totalRate;
+  const totalRate = Object.values(spawnRates).reduce((a, b) => a + b, 0);
+  const adjustedRates = {};
+  for (const rarity in spawnRates) {
+    adjustedRates[rarity] = spawnRates[rarity] / totalRate;
   }
 
-  // Select rarity based on adjusted rates
+  // Select rarity based on rates
   const random = Math.random();
   let cumulative = 0;
   let selectedRarity = 'common';
@@ -538,14 +581,14 @@ function spawnCreature() {
   const creatureType = creaturesOfRarity[Math.floor(Math.random() * creaturesOfRarity.length)];
 
   // Spawn creature near player
-  const spawnDistance = 20 + Math.random() * 30;
+  const spawnDistance = 15 + Math.random() * 20;
   const angle = Math.random() * Math.PI * 2;
   const spawnX = gameState.player.position.x + Math.cos(angle) * spawnDistance;
   const spawnZ = gameState.player.position.z + Math.sin(angle) * spawnDistance;
 
   // Create 3D creature
   const creatureMesh = createCreatureMesh(creatureType);
-  creatureMesh.position.set(spawnX, 1, spawnZ);
+  creatureMesh.position.set(spawnX, 0, spawnZ);
   creatureMesh.userData = { ...creatureType, id: Date.now() };
 
   gameState.scene.add(creatureMesh);
@@ -565,23 +608,36 @@ function createCreatureMesh(creatureData) {
   const group = new THREE.Group();
 
   const color = rarityColors[creatureData.rarity] || 0x808080;
-  const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-  const material = new THREE.MeshStandardMaterial({ color });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.y = 0.75;
-  mesh.castShadow = true;
-  group.add(mesh);
+
+  // Body (circular from top)
+  const bodyGeometry = new THREE.CylinderGeometry(1, 1, 0.5, 32);
+  const bodyMaterial = new THREE.MeshStandardMaterial({ color });
+  const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+  body.position.y = 0.5;
+  body.castShadow = true;
+  group.add(body);
+
+  // Top detail
+  const topGeometry = new THREE.CircleGeometry(1, 32);
+  const topMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.3 });
+  const top = new THREE.Mesh(topGeometry, topMaterial);
+  top.rotation.x = -Math.PI / 2;
+  top.position.y = 0.76;
+  top.castShadow = true;
+  group.add(top);
 
   // Add glow effect for rare+ creatures
   if (['legendary', 'mythic', 'divine', 'celestial', 'eternal', 'omniversal'].includes(creatureData.rarity)) {
-    const glowGeometry = new THREE.BoxGeometry(2, 2, 2);
+    const glowGeometry = new THREE.RingGeometry(1.1, 1.5, 32);
     const glowMaterial = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
-      opacity: 0.3
+      opacity: 0.4,
+      side: THREE.DoubleSide
     });
     const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.position.y = 0.75;
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = 0.8;
     group.add(glow);
   }
 
@@ -597,7 +653,7 @@ function tryCatchCreature() {
 
   gameState.creaturesInWorld.forEach(creature => {
     const distance = gameState.player.position.distanceTo(creature.position);
-    if (distance < nearestDistance && distance < 5) {
+    if (distance < nearestDistance && distance < 3) {
       nearestDistance = distance;
       nearestCreature = creature;
     }
@@ -628,7 +684,6 @@ function startBattle(creatureMesh) {
 
   // Show battle UI
   showBattleUI();
-  gameState.controls.unlock();
 }
 
 function showBattleUI() {
@@ -649,7 +704,6 @@ function showBattleUI() {
   `;
 
   showScreen('battle-ui');
-  document.getElementById('game-hud').classList.add('hidden');
 }
 
 async function performAttack() {
@@ -756,7 +810,6 @@ function endBattle() {
 
   showScreen('game-hud');
   document.getElementById('game-hud').classList.remove('hidden');
-  gameState.controls.lock();
 }
 
 function updateBattleUI() {
@@ -792,7 +845,7 @@ function animate() {
 
   // Spawn creatures periodically
   spawnTimer += delta;
-  if (spawnTimer > 3 && gameState.creaturesInWorld.length < 20) {
+  if (spawnTimer > 2 && gameState.creaturesInWorld.length < 15) {
     spawnCreature();
     spawnTimer = 0;
   }
@@ -824,6 +877,10 @@ async function login(username, password) {
     if (response.ok) {
       gameState.userId = data.userId;
       gameState.username = data.username;
+
+      // Save credentials for auto-login
+      localStorage.setItem('game_username', username);
+      localStorage.setItem('game_password', password);
 
       // Give player Lucas da Vucas as starter (only if first time)
       if (data.isNewUser) {
@@ -858,6 +915,25 @@ async function login(username, password) {
     showNotification('Login failed', 'error');
     return null;
   }
+}
+
+async function autoLogin() {
+  const savedUsername = localStorage.getItem('game_username');
+  const savedPassword = localStorage.getItem('game_password');
+
+  if (savedUsername && savedPassword) {
+    const result = await login(savedUsername, savedPassword);
+    if (result) {
+      showScreen('dashboard');
+      document.getElementById('dashboard-username').textContent = savedUsername;
+      await loadUserCreatures();
+      const creatures = await loadUserCreatures();
+      document.getElementById('dashboard-stats').textContent = `${creatures.length} Creatures Collected`;
+      showNotification(`Welcome back, ${savedUsername}!`, 'success');
+      return true;
+    }
+  }
+  return false;
 }
 
 async function loadCreatures() {
@@ -906,13 +982,29 @@ async function joinLobby(lobbyId) {
     });
 
     if (response.ok) {
-      gameState.currentLobby = lobbyId;
+      const data = await response.json();
+      gameState.currentLobby = data.lobbyId || lobbyId;
       return true;
     }
     return false;
   } catch (error) {
     console.error('Error joining lobby:', error);
     return false;
+  }
+}
+
+async function handleJoinLobby(lobbyId) {
+  const success = await joinLobby(lobbyId);
+  if (success) {
+    gameState.socket.emit('join_lobby', {
+      lobbyId: gameState.currentLobby,
+      userId: gameState.userId,
+      username: gameState.username
+    });
+    showScreen('game-hud');
+    updateActiveCreatureInfo();
+  } else {
+    showNotification('Failed to join lobby', 'error');
   }
 }
 
@@ -926,17 +1018,40 @@ function setupSocket() {
 
   gameState.socket.on('player_joined', (data) => {
     console.log('Player joined:', data);
-    // Create other player mesh
-    const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
-    const playerMaterial = new THREE.MeshStandardMaterial({ color: 0xFF0000 });
-    const playerMesh = new THREE.Mesh(playerGeometry, playerMaterial);
-    playerMesh.position.y = 1;
-    gameState.scene.add(playerMesh);
+    // Create other player mesh (top-down style)
+    const playerGroup = new THREE.Group();
+
+    // Body
+    const bodyGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.3, 32);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xFF6B6B });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = 0.5;
+    body.castShadow = true;
+    playerGroup.add(body);
+
+    // Shoulders
+    const shoulderGeometry = new THREE.BoxGeometry(2.2, 0.2, 0.8);
+    const shoulderMaterial = new THREE.MeshStandardMaterial({ color: 0xFF6B6B });
+    const shoulders = new THREE.Mesh(shoulderGeometry, shoulderMaterial);
+    shoulders.position.y = 0.8;
+    shoulders.castShadow = true;
+    playerGroup.add(shoulders);
+
+    // Head
+    const headGeometry = new THREE.CircleGeometry(0.5, 32);
+    const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFCC99 });
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.rotation.x = -Math.PI / 2;
+    head.position.y = 1.1;
+    head.castShadow = true;
+    playerGroup.add(head);
+
+    gameState.scene.add(playerGroup);
 
     gameState.otherPlayers.set(data.userId, {
       username: data.username,
-      mesh: playerMesh,
-      position: { x: 0, y: 1, z: 0 }
+      mesh: playerGroup,
+      position: { x: 0, y: 0, z: 0 }
     });
   });
 
@@ -1051,9 +1166,17 @@ async function renderLobbyList() {
     lobbyDiv.innerHTML = `
       <span>${lobby.name}</span>
       <span>${lobby.current_players}/${lobby.max_players}</span>
-      <button onclick="joinLobby('${lobby.id}')">Join</button>
+      <button class="join-lobby-btn" data-lobby-id="${lobby.id}">Join</button>
     `;
     lobbyList.appendChild(lobbyDiv);
+  });
+
+  // Add event listeners to join buttons
+  document.querySelectorAll('.join-lobby-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const lobbyId = btn.dataset.lobbyId;
+      await handleJoinLobby(lobbyId);
+    });
   });
 }
 
@@ -1104,6 +1227,12 @@ async function init() {
     }
   });
 
+  // Try auto-login first
+  const autoLoggedIn = await autoLogin();
+  if (!autoLoggedIn) {
+    showScreen('login-screen');
+  }
+
   document.getElementById('btn-play').addEventListener('click', async () => {
     if (!gameState.userId) {
       showNotification('Please login first!', 'error');
@@ -1115,18 +1244,10 @@ async function init() {
     const availableLobby = lobbies.find(l => l.current_players < l.max_players);
 
     if (availableLobby) {
-      await joinLobby(availableLobby.id);
-      gameState.socket.emit('join_lobby', {
-        lobbyId: availableLobby.id,
-        userId: gameState.userId,
-        username: gameState.username
-      });
+      await handleJoinLobby(availableLobby.id);
+    } else {
+      showNotification('No available lobbies', 'error');
     }
-
-    showScreen('game-hud');
-    document.getElementById('game-hud').classList.remove('hidden');
-    updateActiveCreatureInfo();
-    gameState.controls.lock();
   });
 
   document.getElementById('btn-servers').addEventListener('click', () => {
@@ -1159,13 +1280,14 @@ async function init() {
     gameState.userId = null;
     gameState.username = null;
     gameState.activeCreature = null;
+    localStorage.removeItem('game_username');
+    localStorage.removeItem('game_password');
     showScreen('login-screen');
     document.getElementById('username-input').value = '';
     document.getElementById('password-input').value = '';
   });
 
   document.getElementById('btn-menu').addEventListener('click', () => {
-    gameState.controls.unlock();
     document.getElementById('game-hud').classList.add('hidden');
     showScreen('dashboard');
   });
