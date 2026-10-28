@@ -1,109 +1,119 @@
--- Catch a Creature - Complete Database Schema
+-- ══════════════════════════════════════════════════════════
+-- Catch a Creature — Full Database Schema (fresh install)
+-- Run this once on a brand-new Supabase project.
+-- For existing databases, run migrate.sql instead.
+-- ══════════════════════════════════════════════════════════
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table
+-- ── Users ─────────────────────────────────────────────────
 CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  username VARCHAR(50) UNIQUE NOT NULL,
-  password VARCHAR(255) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  battles_won INT DEFAULT 0,
-  battles_lost INT DEFAULT 0,
-  trades_completed INT DEFAULT 0
+  id               UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+  username         VARCHAR(50)  UNIQUE NOT NULL,
+  password         VARCHAR(255) NOT NULL,
+  created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  battles_won      INT          DEFAULT 0,
+  battles_lost     INT          DEFAULT 0,
+  trades_completed INT          DEFAULT 0
 );
 
--- User creatures (caught creatures)
+-- ── User creatures ────────────────────────────────────────
+-- creature_id is a short string key (c0–c10) matching the
+-- CREATURES array defined in server.js — no separate table needed.
 CREATE TABLE user_creatures (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  creature_id VARCHAR(10) NOT NULL,
-  caught_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  is_active BOOLEAN DEFAULT false,
-  current_hp INT,
-  is_tradable BOOLEAN DEFAULT true,
-  in_battle BOOLEAN DEFAULT false
+  id           UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id      UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  creature_id  VARCHAR(10)  NOT NULL,
+  caught_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+  is_active    BOOLEAN      DEFAULT false,
+  current_hp   INT,
+  is_tradable  BOOLEAN      DEFAULT true,
+  in_battle    BOOLEAN      DEFAULT false
 );
 
--- Lobbies table
+-- ── Lobbies ───────────────────────────────────────────────
+-- Lobby state is managed in-memory by the server; this table
+-- is kept for potential persistence / analytics.
 CREATE TABLE lobbies (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name VARCHAR(50),
-  max_players INT DEFAULT 20,
-  current_players INT DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'full', 'closed'))
+  id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name            VARCHAR(50),
+  max_players     INT         DEFAULT 20,
+  current_players INT         DEFAULT 0,
+  created_at      TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+  status          VARCHAR(20) DEFAULT 'active'
+    CHECK (status IN ('active', 'full', 'closed'))
 );
 
--- Lobby players
+-- ── Lobby players ─────────────────────────────────────────
 CREATE TABLE lobby_players (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  lobby_id UUID REFERENCES lobbies(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  id         UUID      PRIMARY KEY DEFAULT uuid_generate_v4(),
+  lobby_id   UUID      NOT NULL REFERENCES lobbies(id)  ON DELETE CASCADE,
+  user_id    UUID      NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
+  joined_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   position_x DECIMAL(10,2) DEFAULT 0,
   position_y DECIMAL(10,2) DEFAULT 0,
-  position_z DECIMAL(10,2) DEFAULT 0,
   UNIQUE(lobby_id, user_id)
 );
 
--- Trades
+-- ── Trades ────────────────────────────────────────────────
 CREATE TABLE trades (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  initiator_id UUID REFERENCES users(id),
-  recipient_id UUID REFERENCES users(id),
-  lobby_id UUID REFERENCES lobbies(id),
-  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'completed')),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  id           UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  initiator_id UUID        REFERENCES users(id),
+  recipient_id UUID        REFERENCES users(id),
+  lobby_id     UUID        REFERENCES lobbies(id),
+  status       VARCHAR(20) DEFAULT 'pending'
+    CHECK (status IN ('pending', 'accepted', 'declined', 'completed')),
+  created_at   TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP
 );
 
--- Trade items
+-- ── Trade items ───────────────────────────────────────────
 CREATE TABLE trade_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  trade_id UUID REFERENCES trades(id) ON DELETE CASCADE,
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  trade_id         UUID REFERENCES trades(id)         ON DELETE CASCADE,
   user_creature_id UUID REFERENCES user_creatures(id),
-  from_user_id UUID REFERENCES users(id)
+  from_user_id     UUID REFERENCES users(id)
 );
 
--- Battles
+-- ── Battles ───────────────────────────────────────────────
 CREATE TABLE battles (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  player1_id UUID REFERENCES users(id),
-  player2_id UUID REFERENCES users(id),
-  lobby_id UUID REFERENCES lobbies(id),
-  winner_id UUID REFERENCES users(id),
-  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'completed')),
-  started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  id           UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  player1_id   UUID        REFERENCES users(id),
+  player2_id   UUID        REFERENCES users(id),
+  lobby_id     UUID        REFERENCES lobbies(id),
+  winner_id    UUID        REFERENCES users(id),
+  status       VARCHAR(20) DEFAULT 'active'
+    CHECK (status IN ('active', 'completed')),
+  started_at   TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP
 );
 
--- Battle participants
+-- ── Battle participants ───────────────────────────────────
 CREATE TABLE battle_participants (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  battle_id UUID REFERENCES battles(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(id),
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  battle_id        UUID REFERENCES battles(id)        ON DELETE CASCADE,
+  user_id          UUID REFERENCES users(id),
   user_creature_id UUID REFERENCES user_creatures(id)
 );
 
--- Insert placeholder creatures
-INSERT INTO creatures (name, rarity, attack, defense, speed, hp, special_ability, model_data, spawn_rate) VALUES
-('Blocky Beast', 'common', 10, 10, 10, 50, 'None', '{"color": "#808080", "shape": "box"}', 0.40),
-('Forest Walker', 'uncommon', 15, 12, 15, 60, 'Quick Step', '{"color": "#90EE90", "shape": "box"}', 0.25),
-('Sky Glider', 'rare', 20, 15, 25, 70, 'Flight', '{"color": "#87CEEB", "shape": "box"}', 0.15),
-('Crystal Golem', 'epic', 30, 25, 20, 90, 'Crystal Shield', '{"color": "#9370DB", "shape": "box"}', 0.08),
-('Fire Spirit', 'legendary', 40, 30, 35, 120, 'Flame Burst', '{"color": "#FF4500", "shape": "box"}', 0.05),
-('Shadow Wraith', 'mythic', 50, 35, 40, 150, 'Phase Shift', '{"color": "#4B0082", "shape": "box"}', 0.03),
-('Light Bringer', 'divine', 60, 45, 45, 180, 'Holy Light', '{"color": "#FFD700", "shape": "box"}', 0.02),
-('Star Weaver', 'celestial', 70, 55, 50, 220, 'Starfall', '{"color": "#00CED1", "shape": "box"}', 0.015),
-('Time Keeper', 'eternal', 85, 65, 60, 280, 'Time Warp', '{"color": "#FF1493", "shape": "box"}', 0.009),
-('Void Master', 'omniversal', 100, 80, 75, 350, 'Void Blast', '{"color": "rainbow", "shape": "box"}', 0.001);
+-- ── Indexes ───────────────────────────────────────────────
+CREATE INDEX idx_user_creatures_user_id  ON user_creatures(user_id);
+CREATE INDEX idx_user_creatures_active   ON user_creatures(user_id, is_active);
+CREATE INDEX idx_lobbies_status          ON lobbies(status);
+CREATE INDEX idx_lobby_players_lobby_id  ON lobby_players(lobby_id);
+CREATE INDEX idx_lobby_players_user_id   ON lobby_players(user_id);
+CREATE INDEX idx_trades_status           ON trades(status);
+CREATE INDEX idx_battles_status          ON battles(status);
 
--- Create indexes for performance
-CREATE INDEX idx_user_creatures_user_id ON user_creatures(user_id);
-CREATE INDEX idx_lobbies_status ON lobbies(status);
-CREATE INDEX idx_lobby_players_lobby_id ON lobby_players(lobby_id);
-CREATE INDEX idx_lobby_players_user_id ON lobby_players(user_id);
-CREATE INDEX idx_trades_status ON trades(status);
-CREATE INDEX idx_battles_status ON battles(status);
+-- ── Row Level Security (permissive for anon key) ──────────
+-- Disable RLS so the server-side anon key can read/write freely.
+-- Tighten these policies once you add JWT-based auth.
+ALTER TABLE users             DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_creatures    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE lobbies           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE lobby_players     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE trades            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE trade_items       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE battles           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE battle_participants DISABLE ROW LEVEL SECURITY;
