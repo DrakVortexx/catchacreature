@@ -989,13 +989,29 @@ async function joinLobby(lobbyId) {
     });
 
     if (response.ok) {
-      gameState.currentLobby = lobbyId;
+      const data = await response.json();
+      gameState.currentLobby = data.lobbyId || lobbyId;
       return true;
     }
     return false;
   } catch (error) {
     console.error('Error joining lobby:', error);
     return false;
+  }
+}
+
+async function handleJoinLobby(lobbyId) {
+  const success = await joinLobby(lobbyId);
+  if (success) {
+    gameState.socket.emit('join_lobby', {
+      lobbyId: gameState.currentLobby,
+      userId: gameState.userId,
+      username: gameState.username
+    });
+    showScreen('game-hud');
+    updateActiveCreatureInfo();
+  } else {
+    showNotification('Failed to join lobby', 'error');
   }
 }
 
@@ -1134,9 +1150,17 @@ async function renderLobbyList() {
     lobbyDiv.innerHTML = `
       <span>${lobby.name}</span>
       <span>${lobby.current_players}/${lobby.max_players}</span>
-      <button onclick="joinLobby('${lobby.id}')">Join</button>
+      <button class="join-lobby-btn" data-lobby-id="${lobby.id}">Join</button>
     `;
     lobbyList.appendChild(lobbyDiv);
+  });
+
+  // Add event listeners to join buttons
+  document.querySelectorAll('.join-lobby-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const lobbyId = btn.dataset.lobbyId;
+      await handleJoinLobby(lobbyId);
+    });
   });
 }
 
@@ -1198,16 +1222,10 @@ async function init() {
     const availableLobby = lobbies.find(l => l.current_players < l.max_players);
 
     if (availableLobby) {
-      await joinLobby(availableLobby.id);
-      gameState.socket.emit('join_lobby', {
-        lobbyId: availableLobby.id,
-        userId: gameState.userId,
-        username: gameState.username
-      });
+      await handleJoinLobby(availableLobby.id);
+    } else {
+      showNotification('No available lobbies', 'error');
     }
-
-    showScreen('game-hud');
-    updateActiveCreatureInfo();
   });
 
   document.getElementById('btn-servers').addEventListener('click', () => {

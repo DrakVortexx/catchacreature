@@ -47,21 +47,20 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname)));
 
-// In-memory lobby management (8 rooms max)
-const MAX_LOBBIES = 8;
+// In-memory lobby management
+let lobbyCounter = 0;
 
-// Initialize lobbies
-for (let i = 0; i < MAX_LOBBIES; i++) {
-  const lobbyId = `lobby-${i + 1}`;
-  db.lobbies.set(lobbyId, {
-    id: lobbyId,
-    name: `Lobby ${i + 1}`,
-    max_players: 8,
-    current_players: 0,
-    status: 'active',
-    players: new Map()
-  });
-}
+// Initialize with one lobby
+const initialLobbyId = `lobby-${lobbyCounter + 1}`;
+db.lobbies.set(initialLobbyId, {
+  id: initialLobbyId,
+  name: `Lobby ${lobbyCounter + 1}`,
+  max_players: 8,
+  current_players: 0,
+  status: 'active',
+  players: new Map()
+});
+lobbyCounter++;
 
 // API Routes
 
@@ -222,17 +221,29 @@ app.get('/api/lobbies', (req, res) => {
 app.post('/api/lobbies/:lobbyId/join', (req, res) => {
   try {
     const { userId } = req.body;
-    const lobbyId = req.params.lobbyId;
+    let lobbyId = req.params.lobbyId;
 
-    const lobby = db.lobbies.get(lobbyId);
+    let lobby = db.lobbies.get(lobbyId);
+
+    // If lobby is full or doesn't exist, create a new one
     if (!lobby || lobby.current_players >= lobby.max_players) {
-      return res.status(400).json({ error: 'Lobby full or not found' });
+      lobbyCounter++;
+      lobbyId = `lobby-${lobbyCounter}`;
+      lobby = {
+        id: lobbyId,
+        name: `Lobby ${lobbyCounter}`,
+        max_players: 8,
+        current_players: 0,
+        status: 'active',
+        players: new Map()
+      };
+      db.lobbies.set(lobbyId, lobby);
     }
 
     lobby.players.set(userId, { socketId: null, username: null });
     lobby.current_players++;
 
-    res.json({ success: true });
+    res.json({ success: true, lobbyId });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
