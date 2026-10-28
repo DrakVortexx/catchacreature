@@ -884,6 +884,10 @@ async function login(username, password) {
       gameState.userId = data.userId;
       gameState.username = data.username;
 
+      // Save credentials for auto-login
+      localStorage.setItem('game_username', username);
+      localStorage.setItem('game_password', password);
+
       // Give player Lucas da Vucas as starter (only if first time)
       if (data.isNewUser) {
         const starterCreature = gameState.creatures.find(c => c.id === '0');
@@ -917,6 +921,25 @@ async function login(username, password) {
     showNotification('Login failed', 'error');
     return null;
   }
+}
+
+async function autoLogin() {
+  const savedUsername = localStorage.getItem('game_username');
+  const savedPassword = localStorage.getItem('game_password');
+
+  if (savedUsername && savedPassword) {
+    const result = await login(savedUsername, savedPassword);
+    if (result) {
+      showScreen('dashboard');
+      document.getElementById('dashboard-username').textContent = savedUsername;
+      await loadUserCreatures();
+      const creatures = await loadUserCreatures();
+      document.getElementById('dashboard-stats').textContent = `${creatures.length} Creatures Collected`;
+      showNotification(`Welcome back, ${savedUsername}!`, 'success');
+      return true;
+    }
+  }
+  return false;
 }
 
 async function loadCreatures() {
@@ -1210,6 +1233,12 @@ async function init() {
     }
   });
 
+  // Try auto-login first
+  const autoLoggedIn = await autoLogin();
+  if (!autoLoggedIn) {
+    showScreen('login-screen');
+  }
+
   document.getElementById('btn-play').addEventListener('click', async () => {
     if (!gameState.userId) {
       showNotification('Please login first!', 'error');
@@ -1257,6 +1286,8 @@ async function init() {
     gameState.userId = null;
     gameState.username = null;
     gameState.activeCreature = null;
+    localStorage.removeItem('game_username');
+    localStorage.removeItem('game_password');
     showScreen('login-screen');
     document.getElementById('username-input').value = '';
     document.getElementById('password-input').value = '';
