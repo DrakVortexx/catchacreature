@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catch a Creature</title>
+  <link rel="stylesheet" href="public/assets/style.css">
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+  <div id="game-container"></div>
+
+  <!-- Main Menu -->
+  <div id="main-menu" class="menu">
+    <h1>Catch a Creature</h1>
+    <div class="menu-buttons">
+      <button id="btn-play">Play</button>
+      <button id="btn-servers">Servers</button>
+      <button id="btn-collection">Collection</button>
+      <button id="btn-settings">Settings</button>
+    </div>
+    <div id="login-section">
+      <input type="text" id="username-input" placeholder="Enter username" maxlength="20">
+      <button id="btn-login">Login</button>
+    </div>
+  </div>
+
+  <!-- Server Browser -->
+  <div id="server-browser" class="menu hidden">
+    <h2>Servers</h2>
+    <div id="lobby-list"></div>
+    <button id="btn-back">Back</button>
+  </div>
+
+  <!-- Collection View -->
+  <div id="collection-view" class="menu hidden">
+    <h2>Collection</h2>
+    <div class="collection-controls">
+      <select id="rarity-filter">
+        <option value="all">All Rarities</option>
+        <option value="common">Common</option>
+        <option value="uncommon">Uncommon</option>
+        <option value="rare">Rare</option>
+        <option value="epic">Epic</option>
+        <option value="legendary">Legendary</option>
+        <option value="mythic">Mythic</option>
+        <option value="divine">Divine</option>
+        <option value="celestial">Celestial</option>
+        <option value="eternal">Eternal</option>
+        <option value="omniversal">Omniversal</option>
+      </select>
+      <input type="text" id="search-creatures" placeholder="Search creatures...">
+    </div>
+    <div id="creature-grid"></div>
+    <button id="btn-back-collection">Back</button>
+  </div>
+
+  <!-- In-Game HUD -->
+  <div id="game-hud" class="hidden">
+    <div id="hud-top-left">
+      <div id="player-info"></div>
+      <div id="active-creature-info"></div>
+    </div>
+    <div id="hud-top-right">
+      <div id="lobby-info"></div>
+    </div>
+    <div id="hud-bottom-center">
+      <button id="btn-catch">Fight (E)</button>
+      <button id="btn-store">Store in Pen</button>
+      <button id="btn-menu">Menu</button>
+    </div>
+    <div id="hud-bottom-left">
+      <div id="chat-box">
+        <div id="chat-messages"></div>
+        <input type="text" id="chat-input" placeholder="Press Enter to chat...">
+      </div>
+    </div>
+  </div>
+
+  <!-- Battle UI -->
+  <div id="battle-ui" class="menu hidden">
+    <h2>Fight!</h2>
+    <div class="battle-container">
+      <div id="battle-player1">
+        <h3>Your Creature</h3>
+        <div id="player1-creatures"></div>
+      </div>
+      <div id="battle-player2">
+        <h3>Wild Creature</h3>
+        <div id="player2-creatures"></div>
+      </div>
+    </div>
+    <div class="battle-actions">
+      <button id="btn-attack">Attack</button>
+    </div>
+    <button id="btn-exit-battle">Run Away</button>
+  </div>
+
+  <!-- Settings -->
+  <div id="settings" class="menu hidden">
+    <h2>Settings</h2>
+    <div class="setting">
+      <label>Music Volume</label>
+      <input type="range" id="music-volume" min="0" max="100" value="50">
+    </div>
+    <div class="setting">
+      <label>SFX Volume</label>
+      <input type="range" id="sfx-volume" min="0" max="100" value="50">
+    </div>
+    <button id="btn-back-settings">Back</button>
+  </div>
+
+  <!-- Notifications -->
+  <div id="notifications"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="public/assets/game.js"></script>
+</body>
+</html>
