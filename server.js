@@ -148,9 +148,10 @@ app.post('/api/creatures/catch', async (req, res) => {
       .select('id').single();
     if (error) throw error;
 
-    // update stats
-    await supabase.from('users').update({ battles_won: supabase.rpc ? undefined : undefined }).eq('id', userId);
-    await supabase.rpc('increment_battles_won', { uid: userId }).catch(() => {});
+    // increment battles_won
+    await supabase.rpc('increment_battles_won', { uid: userId }).catch(() => {
+      // RPC may not exist yet — silently ignore
+    });
 
     res.json({ userCreatureId: data.id, creature });
   } catch (err) {
