@@ -322,7 +322,6 @@ class Game {
     });
     document.getElementById('btn-store-pen').addEventListener('click', () => this._storeInBase());
     document.getElementById('btn-menu').addEventListener('click', () => this.stop());
-    document.getElementById('btn-view-pen').addEventListener('click', () => window.openPenModal());
   }
 
   _tryFight() {
