@@ -233,6 +233,32 @@ app.get('/api/users/:userId/creatures', async (req, res) => {
   }
 });
 
+// ── API: Equip creature ───────────────────────────────────
+app.post('/api/users/:userId/creatures/:userCreatureId/equip', async (req, res) => {
+  try {
+    const { userId, userCreatureId } = req.params;
+
+    // Set all creatures for this user to is_active = false
+    await supabase.from('user_creatures')
+      .update({ is_active: false })
+      .eq('user_id', userId);
+
+    // Set the selected creature to is_active = true
+    const { data, error } = await supabase.from('user_creatures')
+      .update({ is_active: true })
+      .eq('id', userCreatureId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Equip creature:', e.message);
+    res.status(500).json({ error: 'Could not equip creature.' });
+  }
+});
+
 // ── API: Lobbies ──────────────────────────────────────────
 app.get('/api/lobbies', (req, res) => {
   res.json(Array.from(lobbies.values()).map(l => ({
@@ -305,6 +331,17 @@ io.on('connection', (socket) => {
     socket.to(currentLobby.id).emit('creature_stored_broadcast', {
       userId: currentUser.userId, username: currentUser.username, creatureId
     });
+  });
+
+  socket.on('player_frozen', ({ targetUserId, duration }) => {
+    if (!currentLobby || !currentUser) return;
+    const targetPlayer = currentLobby.players.get(targetUserId);
+    if (targetPlayer) {
+      const targetSocket = io.sockets.sockets.get(targetPlayer.socketId);
+      if (targetSocket) {
+        targetSocket.emit('player_frozen', { duration });
+      }
+    }
   });
 
   socket.on('leave_lobby', () => cleanup());

@@ -71,10 +71,16 @@ class Game {
     // inventory system
     this.inventory      = [
       { id: 'wooden_sword', name: 'Wooden Sword', icon: '🗡️', type: 'weapon' },
-      null, null, null, null
+      { id: 'bat', name: 'Bat', icon: '🏏', type: 'weapon' },
+      null, null, null
     ];
     this.activeSlot     = 0; // 0-indexed
     this.money          = 0;
+    this.moneyTimer     = 0;
+
+    // freeze mechanic
+    this.frozenPlayers  = new Map(); // userId -> freezeEndTime
+    this.frozenUntil    = 0; // when the current player is frozen until
 
     // tutorial state
     this.tutorialStep   = -1; // -1 = not shown, 0..N = active
@@ -127,9 +133,25 @@ class Game {
       for (let x = 0; x < WORLD_W; x++)
         tiles[y][x] = 3;
 
-    // 7 player bases at the very bottom
-    for (let i = 0; i < 7; i++)
-      this._fillTiles(tiles, 2 + i * 8, WORLD_H - 4, 6, 4, 3);
+    // 7 player pens at the very bottom - fenced areas
+    for (let i = 0; i < 7; i++) {
+      const bx = 2 + i * 8;
+      const by = WORLD_H - 4;
+      // Floor
+      this._fillTiles(tiles, bx, by, 6, 4, 3);
+      // Fence (trees as fence posts) - left and right
+      for (let fy = by; fy < by + 4; fy++) {
+        tiles[fy][bx] = 2;      // left fence
+        tiles[fy][bx + 5] = 2;  // right fence
+      }
+      // Fence - top
+      for (let fx = bx; fx < bx + 6; fx++) {
+        tiles[by][fx] = 2;
+      }
+      // Gate (bottom center) - leave 2 tiles open
+      tiles[by + 3][bx + 2] = 0; // gate left
+      tiles[by + 3][bx + 3] = 0; // gate right
+    }
 
     // Lobby structures
     this._fillTiles(tiles, 2, FOREST_END + 2, 7, 5, 3);           // Store
@@ -256,7 +278,7 @@ class Game {
       ctx.stroke();
     }
 
-    // Base labels
+    // Pen labels
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.font      = 'bold 14px "Segoe UI"';
     ctx.textAlign = 'left';
@@ -264,7 +286,7 @@ class Game {
     for (let i = 0; i < 7; i++) {
       const bx = (2 + i * 8) * TILE + 6;
       const by = (WORLD_H - 4) * TILE + 8;
-      ctx.fillText('base', bx, by);
+      ctx.fillText('pen', bx, by);
     }
 
     return oc;
@@ -305,7 +327,17 @@ class Game {
   _bindInputs() {
     window.addEventListener('keydown', e => {
       this.keys[e.key.toLowerCase()] = true;
-      if (e.key.toLowerCase() === 'e' && this.tutorialStep === -1) this._tryFight();
+      if (e.key.toLowerCase() === 'e') {
+        // Check if near base first
+        const FOREST_END = WORLD_H - LOBBY_H;
+        const inLobby    = this.player.y / TILE > FOREST_END;
+        const nearBase   = inLobby && this.player.y / TILE > (WORLD_H - 6);
+        if (nearBase && this.myCreature) {
+          this._openCreatureGUI();
+        } else if (this.tutorialStep === -1) {
+          this._tryFight();
+        }
+      }
       if (e.key === 'Enter') {
         const ci = document.getElementById('chat-input');
         if (document.activeElement !== ci) { ci.focus(); e.preventDefault(); }
@@ -338,11 +370,164 @@ class Game {
         this._updateNewHUD();
       }
     });
+
+    // Mouse click for bat weapon
+    this.canvas.addEventListener('mousedown', e => {
+      if (e.button === 0) { // Left click
+        this._handleLeftClick(e);
+      }
+    });
   }
 
   _tryFight() {
     if (!this.isRunning || !this.nearbyCreature) return;
     this._startBattle(this.nearbyCreature);
+  }
+
+  _openCreatureGUI() {
+    window.openCreatureGUI();
+  }
+
+  async _loadCreatureGUI() {
+    const equippedDiv = document.getElementById('gui-equipped-info');
+    const baseDiv = document.getElementById('gui-base-creatures');
+
+    // Show equipped creature
+    if (this.myCreature) {
+      const c = this.myCreature;
+      equippedDiv.innerHTML = `
+        <div style="font-size:16px;font-weight:700;color:${RARITY_COLORS[c.rarity]};margin-bottom:8px;">${c.name}</div>
+        <div style="font-size:12px;color:var(--gray);margin-bottom:4px;">${c.rarity.charAt(0).toUpperCase() + c.rarity.slice(1)}</div>
+        <div style="font-size:11px;color:var(--light);">ATK ${c.attack} · DEF ${c.defense} · SPD ${c.speed}</div>
+        <div style="font-size:11px;color:var(--light);">HP ${c.hp}</div>
+      `;
+    } else {
+      equippedDiv.innerHTML = '<p style="color:var(--gray);font-size:13px;">No creature equipped</p>';
+      document.getElementById('btn-deposit-creature').disabled = true;
+    }
+
+    // Show base creatures (all non-equipped creatures)
+    const baseCreatures = this.collection.filter(uc => uc.creature && !uc.is_active);
+    if (baseCreatures.length === 0) {
+      baseDiv.innerHTML = '<p style="color:var(--gray);font-size:13px;">No creatures in base</p>';
+    } else {
+      baseDiv.innerHTML = '';
+      baseCreatures.forEach(uc => {
+        const c = uc.creature;
+        const btn = document.createElement('button');
+        btn.className = 'btn-secondary';
+        btn.style.cssText = 'width:100%;margin-bottom:8px;padding:10px;text-align:left;';
+        btn.innerHTML = `
+          <div style="font-size:14px;font-weight:700;color:${RARITY_COLORS[c.rarity]};">${c.name}</div>
+          <div style="font-size:11px;color:var(--gray);">${c.rarity} · ATK ${c.attack} · HP ${c.hp}</div>
+        `;
+        btn.addEventListener('click', () => this._equipCreature(uc));
+        baseDiv.appendChild(btn);
+      });
+    }
+  }
+
+  async _depositFromGUI() {
+    if (!this.myCreature || this._depositing) return;
+    this._depositing = true;
+    document.getElementById('btn-deposit-creature').disabled = true;
+
+    const creatureToDeposit = this.myCreature;
+    try {
+      const res = await fetch('/api/creatures/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: this.session.userId, creatureId: creatureToDeposit.id })
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+
+      // Add to collection locally
+      this.collection.push({
+        id: data.userCreatureId,
+        creature_id: creatureToDeposit.id,
+        creature: creatureToDeposit,
+        is_active: false,
+        current_hp: creatureToDeposit.hp,
+        caught_at: new Date().toISOString()
+      });
+
+      this.myCreature = null;
+      this._updateHUD();
+      this._updateNewHUD();
+      window.notify(`${creatureToDeposit.name} deposited to base!`, 'success');
+      this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[creatureToDeposit.rarity]);
+      if (this.socket) this.socket.emit('creature_stored', { creatureId: creatureToDeposit.id });
+      window.refreshPenCount && window.refreshPenCount();
+
+      // Reload GUI
+      this._loadCreatureGUI();
+    } catch (e) {
+      console.error('Deposit error:', e);
+      window.notify('Failed to deposit creature.', 'error');
+    } finally {
+      this._depositing = false;
+      document.getElementById('btn-deposit-creature').disabled = !this.myCreature;
+    }
+  }
+
+  async _equipCreature(userCreature) {
+    try {
+      // Update is_active status via API
+      const res = await fetch(`/api/users/${this.session.userId}/creatures/${userCreature.id}/equip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) throw new Error();
+
+      // Update local state
+      const oldEquipped = this.collection.find(uc => uc.is_active);
+      if (oldEquipped) oldEquipped.is_active = false;
+      userCreature.is_active = true;
+
+      // Set as equipped
+      this.myCreature = { ...userCreature.creature, currentHp: userCreature.current_hp || userCreature.creature.hp };
+      this._updateHUD();
+      this._updateNewHUD();
+
+      window.notify(`Equipped ${this.myCreature.name}!`, 'success');
+      this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[this.myCreature.rarity]);
+
+      // Reload GUI
+      this._loadCreatureGUI();
+    } catch (e) {
+      console.error('Equip error:', e);
+      window.notify('Failed to equip creature.', 'error');
+    }
+  }
+
+  _handleLeftClick(e) {
+    const activeItem = this.inventory[this.activeSlot];
+    if (!activeItem || activeItem.id !== 'bat') return;
+
+    // Check if clicking on another player
+    const rect = this.canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left + this.camera.x;
+    const clickY = e.clientY - rect.top + this.camera.y;
+
+    for (const [userId, player] of this.otherPlayers) {
+      const playerX = player.x;
+      const playerY = player.y;
+      const dist = Math.hypot(clickX - playerX, clickY - playerY);
+
+      if (dist < 60) { // Within range
+        // Freeze the player for 3 seconds
+        const freezeEndTime = performance.now() + 3000;
+        this.frozenPlayers.set(userId, freezeEndTime);
+
+        // Notify both players
+        window.notify(`You hit ${player.username} with a bat! They're frozen for 3 seconds.`, 'success');
+        if (this.socket) {
+          this.socket.emit('player_frozen', { targetUserId: userId, duration: 3000 });
+        }
+        break;
+      }
+    }
   }
 
   // ── Start ─────────────────────────────────────────────────
@@ -500,6 +685,16 @@ class Game {
   }
 
   _update(dt, ts) {
+    // Check if player is frozen
+    if (this.frozenUntil > performance.now()) {
+      // Player is frozen, skip movement
+      // Still update camera and other things
+      this.camera.x = Math.max(0, Math.min(WORLD_W*TILE - this.canvas.width,  this.player.x - this.canvas.width/2));
+      this.camera.y = Math.max(0, Math.min(WORLD_H*TILE - this.canvas.height, this.player.y - this.canvas.height/2));
+      this._updateGameLogic(dt, ts);
+      return;
+    }
+
     // Block movement during tutorial or chat
     const blocking = this.tutorialStep >= 0 ||
       document.activeElement === document.getElementById('chat-input');
@@ -532,6 +727,10 @@ class Game {
       this._lastEmit = Date.now();
     }
 
+    this._updateGameLogic(dt, ts);
+  }
+
+  _updateGameLogic(dt, ts) {
     // Creature wander
     for (const wc of this.worldCreatures) {
       if (wc.dead) continue;
@@ -556,6 +755,29 @@ class Game {
       if (p.life <= 0) this.particles.splice(i, 1);
     }
 
+    // Money generation based on creature rarity
+    this.moneyTimer += dt;
+    if (this.moneyTimer >= 1.0) { // Every second
+      this.moneyTimer = 0;
+      if (this.myCreature) {
+        const rarityRates = {
+          'common': 1,
+          'uncommon': 2,
+          'rare': 5,
+          'epic': 10,
+          'legendary': 25,
+          'mythic': 50,
+          'divine': 100,
+          'celestial': 200,
+          'eternal': 500,
+          'omniversal': 1000
+        };
+        const rate = rarityRates[this.myCreature.rarity] || 1;
+        this.money += rate;
+        this._updateNewHUD();
+      }
+    }
+
     // Nearest creature detection
     this.nearbyCreature = null;
     let minD = 72;
@@ -572,12 +794,12 @@ class Game {
     const nearBase   = inLobby && this.player.y / TILE > (WORLD_H - 6);
     document.getElementById('btn-store-pen').disabled = !this.myCreature || !nearBase;
     document.getElementById('btn-store-pen').title    = nearBase
-      ? 'Store creature in your base'
+      ? 'Store creature in your base (or press E)'
       : 'Walk to your base (bottom of lobby) to store';
 
     const depth = Math.max(0, Math.floor((FOREST_END - this.player.y / TILE) * 5));
     document.getElementById('hud-depth').textContent = nearBase
-      ? '🏠 At your base'
+      ? '🏠 At your base (Press E)'
       : depth > 0 ? `Depth: ${depth}m` : 'Lobby';
   }
 
@@ -712,6 +934,9 @@ class Game {
 
     // Player character
     this._drawPlayer(ctx, this.player.x, this.player.y, ts);
+
+    // Draw creatures in base pen
+    this._drawBaseCreatures(ctx, ts);
 
     // "Press E" prompt
     if (this.nearbyCreature) {
@@ -872,6 +1097,52 @@ class Game {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${icon} ${label}`, x, y - 2);
+    ctx.restore();
+  }
+
+  _drawBaseCreatures(ctx, ts) {
+    // Only draw if player is near their base
+    const FOREST_END = WORLD_H - LOBBY_H;
+    const inLobby    = this.player.y / TILE > FOREST_END;
+    const nearBase   = inLobby && this.player.y / TILE > (WORLD_H - 6);
+
+    if (!nearBase || this.collection.length === 0) return;
+
+    // Calculate player's base pen based on x position
+    const penIndex = Math.floor((this.player.x / TILE - 2) / 8);
+    if (penIndex < 0 || penIndex >= 7) return;
+
+    // Get creatures stored in this player's base (all collection creatures)
+    const penCreatures = this.collection.filter(uc => uc.creature && !uc.is_active);
+
+    if (penCreatures.length === 0) return;
+
+    // Draw creatures in the pen area
+    const baseX = (2 + penIndex * 8) * TILE;
+    const baseY = (WORLD_H - 4) * TILE;
+
+    ctx.save();
+    penCreatures.forEach((uc, i) => {
+      const c = uc.creature;
+      // Position creatures in a grid within the pen
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const cx = baseX + TILE + col * TILE * 1.5;
+      const cy = baseY + TILE + row * TILE * 1.5;
+
+      // Bob animation
+      const bob = Math.sin(ts * 0.003 + i) * 3;
+
+      // Draw creature sprite
+      this._drawCreatureSprite(ctx, cx, cy + bob, c.rarity, c.color, ts);
+
+      // Draw creature name below
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px "Segoe UI"';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(c.name.substring(0, 8), cx, cy + 20);
+    });
     ctx.restore();
   }
 
@@ -1149,6 +1420,10 @@ class Game {
     socket.on('creature_stored_broadcast', ({ username, creatureId }) => {
       const c = this.creatures.find(cr => cr.id === creatureId);
       if (c) this._addChat(`🏠 ${username} stored ${c.name} in their base!`);
+    });
+    socket.on('player_frozen', ({ duration }) => {
+      this.frozenUntil = performance.now() + duration;
+      window.notify(`You've been frozen for ${duration/1000} seconds!`, 'error');
     });
   }
 

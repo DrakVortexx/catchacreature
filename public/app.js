@@ -4,6 +4,45 @@ let session     = null;
 let socket      = null;
 window.gameInst = null;
 
+// ── Background Music ─────────────────────────────────────
+const bgMusic = document.getElementById('bg-music');
+let musicVolume = 0.5;
+
+function initBackgroundMusic() {
+  if (!bgMusic) return;
+
+  // Set initial volume
+  bgMusic.volume = musicVolume;
+
+  // Try to play music (may need user interaction due to browser policies)
+  const playMusic = () => {
+    bgMusic.play().catch(e => {
+      console.log('Autoplay prevented, waiting for user interaction');
+    });
+  };
+
+  // Play on first user interaction
+  document.addEventListener('click', function playOnClick() {
+    playMusic();
+    document.removeEventListener('click', playOnClick);
+  }, { once: true });
+
+  // Also try on keypress
+  document.addEventListener('keydown', function playOnKey() {
+    playMusic();
+    document.removeEventListener('keydown', playOnKey);
+  }, { once: true });
+}
+
+// Music volume control
+document.getElementById('music-volume')?.addEventListener('input', (e) => {
+  musicVolume = e.target.value / 100;
+  if (bgMusic) bgMusic.volume = musicVolume;
+});
+
+// Initialize music on load
+initBackgroundMusic();
+
 // ── Notifications ─────────────────────────────────────────
 function notify(message, type = 'info') {
   const el = document.createElement('div');
@@ -84,8 +123,33 @@ loginForm.addEventListener('submit', async e => {
 async function openDashboard() {
   showScreen('dashboard');
   document.getElementById('dash-username').textContent = session.username;
+  await loadEquippedCreature();
 }
 window.openDashboard = openDashboard;
+
+async function loadEquippedCreature() {
+  if (!session) return;
+  try {
+    const res = await fetch(`/api/users/${session.userId}/creatures`);
+    if (!res.ok) return;
+    const collection = await res.json();
+    const equipped = collection.find(uc => uc.is_active) || collection[0];
+    const infoDiv = document.getElementById('equipped-creature-info');
+    if (equipped && equipped.creature) {
+      const c = equipped.creature;
+      infoDiv.innerHTML = `
+        <div style="font-size:18px;font-weight:700;color:${rarityColor(c.rarity)};margin-bottom:8px;">${c.name}</div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:4px;">${c.rarity.charAt(0).toUpperCase() + c.rarity.slice(1)}</div>
+        <div style="font-size:12px;color:var(--light);">ATK ${c.attack} · DEF ${c.defense} · SPD ${c.speed}</div>
+        <div style="font-size:12px;color:var(--light);">HP ${c.hp}</div>
+      `;
+    } else {
+      infoDiv.innerHTML = '<p style="color:var(--gray)">No creature equipped</p>';
+    }
+  } catch (e) {
+    console.error('Load equipped creature error:', e);
+  }
+}
 
 async function refreshBaseCount() {
   if (!session) return;
@@ -278,6 +342,18 @@ function rarityColor(r) {
 // ── Settings ──────────────────────────────────────────────
 document.getElementById('btn-settings').addEventListener('click', () => showModal('settings-modal'));
 document.getElementById('btn-close-settings').addEventListener('click', () => hideModal('settings-modal'));
+
+// ── Creature GUI ─────────────────────────────────────────
+document.getElementById('btn-close-creature-gui').addEventListener('click', () => hideModal('creature-gui-modal'));
+document.getElementById('btn-deposit-creature').addEventListener('click', () => {
+  if (window.gameInst) window.gameInst._depositFromGUI();
+});
+
+function openCreatureGUI() {
+  showModal('creature-gui-modal');
+  if (window.gameInst) window.gameInst._loadCreatureGUI();
+}
+window.openCreatureGUI = openCreatureGUI;
 
 // ── Tutorial wiring ───────────────────────────────────────
 document.getElementById('tut-next').addEventListener('click', () => window.gameInst?._advanceTutorial());
