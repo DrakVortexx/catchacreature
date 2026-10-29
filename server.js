@@ -64,7 +64,7 @@ const CREATURES = [
 
 // ── Lobby state ───────────────────────────────────────────
 const MAX_LOBBIES = 8;
-const MAX_PLAYERS = 20;
+const MAX_PLAYERS = 8;
 const lobbies = new Map();
 
 function getOrCreateLobby(preferredId) {

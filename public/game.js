@@ -356,12 +356,21 @@ class Game {
       if (e.key === 'Escape') e.target.blur();
     });
 
-    document.getElementById('btn-fight').addEventListener('click', () => {
-      if (this.tutorialStep >= 0) this._advanceTutorial();
-      else this._tryFight();
-    });
-    document.getElementById('btn-store-pen').addEventListener('click', () => this._storeInBase());
-    document.getElementById('btn-menu').addEventListener('click', () => this.stop());
+    const btnFight = document.getElementById('btn-fight');
+    if (btnFight) {
+      btnFight.addEventListener('click', () => {
+        if (this.tutorialStep >= 0) this._advanceTutorial();
+        else this._tryFight();
+      });
+    }
+    const btnStorePen = document.getElementById('btn-store-pen');
+    if (btnStorePen) {
+      btnStorePen.addEventListener('click', () => this._storeInBase());
+    }
+    const btnMenu = document.getElementById('btn-menu');
+    if (btnMenu) {
+      btnMenu.addEventListener('click', () => this.stop());
+    }
 
     // Hotbar slot switching with number keys
     window.addEventListener('keydown', e => {
@@ -1195,7 +1204,7 @@ class Game {
       document.getElementById('btn-store-pen').disabled  = true;
     }
     document.getElementById('hud-player-count').textContent =
-      `${this.otherPlayers.size + 1} / 20 players`;
+      `${this.otherPlayers.size + 1} / 8 players`;
   }
 
   _updateNewHUD() {

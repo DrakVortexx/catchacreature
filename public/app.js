@@ -123,33 +123,8 @@ loginForm.addEventListener('submit', async e => {
 async function openDashboard() {
   showScreen('dashboard');
   document.getElementById('dash-username').textContent = session.username;
-  await loadEquippedCreature();
 }
 window.openDashboard = openDashboard;
-
-async function loadEquippedCreature() {
-  if (!session) return;
-  try {
-    const res = await fetch(`/api/users/${session.userId}/creatures`);
-    if (!res.ok) return;
-    const collection = await res.json();
-    const equipped = collection.find(uc => uc.is_active) || collection[0];
-    const infoDiv = document.getElementById('equipped-creature-info');
-    if (equipped && equipped.creature) {
-      const c = equipped.creature;
-      infoDiv.innerHTML = `
-        <div style="font-size:18px;font-weight:700;color:${rarityColor(c.rarity)};margin-bottom:8px;">${c.name}</div>
-        <div style="font-size:13px;color:var(--gray);margin-bottom:4px;">${c.rarity.charAt(0).toUpperCase() + c.rarity.slice(1)}</div>
-        <div style="font-size:12px;color:var(--light);">ATK ${c.attack} · DEF ${c.defense} · SPD ${c.speed}</div>
-        <div style="font-size:12px;color:var(--light);">HP ${c.hp}</div>
-      `;
-    } else {
-      infoDiv.innerHTML = '<p style="color:var(--gray)">No creature equipped</p>';
-    }
-  } catch (e) {
-    console.error('Load equipped creature error:', e);
-  }
-}
 
 async function refreshBaseCount() {
   if (!session) return;

@@ -81,13 +81,6 @@
       border-radius:10px 14px 10px 12px;}
     .dashboard-btn.logout-btn:hover{background:var(--danger);border-color:var(--danger);color:#fff;}
 
-    /* ── Equipped Creature Panel ─────────────────────────── */
-    .equipped-creature-panel{background:var(--card-bg);padding:20px;border-radius:14px;
-      border:2px solid var(--border);margin-bottom:20px;text-align:center;}
-    .equipped-creature-panel h3{font-size:16px;font-weight:700;color:var(--gray);
-      margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;}
-    #equipped-creature-info{font-size:15px;color:var(--light);}
-
     /* ── Modals ─────────────────────────────────────── */
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);
       display:flex;align-items:center;justify-content:center;z-index:200;}
@@ -315,10 +308,6 @@
       <p>Welcome, <span id="dash-username">Player</span></p>
     </header>
     <div class="dashboard-content">
-      <div id="equipped-creature-display" class="equipped-creature-panel">
-        <h3>Equipped Creature</h3>
-        <div id="equipped-creature-info">Loading...</div>
-      </div>
       <button id="btn-play" class="dashboard-btn">Quick play</button>
       <button id="btn-servers" class="dashboard-btn">Server select</button>
       <button id="btn-settings" class="dashboard-btn">Settings</button>
@@ -433,7 +422,7 @@
   </div>
   <div id="hud-topright" class="hud-panel">
     <h3 id="hud-lobby-name">Lobby</h3>
-    <p id="hud-player-count">1 / 20 players</p>
+    <p id="hud-player-count">1 / 8 players</p>
     <p id="hud-depth" style="font-size:11px;color:var(--gray);margin-top:3px;">Depth: 0m</p>
   </div>
   <div id="hud-money">Money $$$</div>
@@ -469,6 +458,11 @@
     <input class="chat-input" id="chat-input" placeholder="Press Enter to chat…">
   </div>
   <canvas id="minimap" width="150" height="110"></canvas>
+  <div id="hud-bottom">
+    <button id="btn-fight" class="hud-btn">Fight</button>
+    <button id="btn-store-pen" class="hud-btn pen-btn">Store in Base</button>
+    <button id="btn-menu" class="hud-btn">Menu</button>
+  </div>
 </div>
 
 <!-- ── Tutorial Overlay ──────────────────────────────── -->
