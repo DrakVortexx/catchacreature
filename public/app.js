@@ -163,9 +163,9 @@ async function startGame(lobbyId, lobbyName) {
     const collection = colRes.ok ? await colRes.json() : [];
     if (!colRes.ok) notify('⚠️ Could not load creatures — check DB permissions.', 'error');
 
-    window.gameInst = new Game();
     showScreen('game-screen');
     document.getElementById('hud').classList.remove('hidden');
+    window.gameInst = new Game();
 
     if (!socket || !socket.connected) socket = io();
 
