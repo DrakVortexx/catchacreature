@@ -5,6 +5,8 @@ const { Server } = require('socket.io');
 const cors      = require('cors');
 const path      = require('path');
 const rateLimit = require('express-rate-limit');
+const bcrypt    = require('bcrypt');
+const SALT_ROUNDS = 12;
 const { createClient } = require('@supabase/supabase-js');
 
 // ── Supabase ──────────────────────────────────────────────
@@ -21,6 +23,7 @@ const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 const PORT   = process.env.PORT || 3000;
 
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -93,7 +96,8 @@ app.post('/api/register', authLimiter, async (req, res) => {
   try {
     const { data: existing } = await supabase.from('users').select('id').eq('username', username).maybeSingle();
     if (existing) return res.status(400).json({ error: 'Username already taken.' });
-    const { data: user, error } = await supabase.from('users').insert({ username, password }).select('id,username').single();
+    const hash = await bcrypt.hash(password, SALT_ROUNDS);
+    const { data: user, error } = await supabase.from('users').insert({ username, password: hash }).select('id,username').single();
     if (error) throw error;
     res.json({ userId: user.id, username: user.username, isNewUser: true });
   } catch (e) {
@@ -111,14 +115,32 @@ app.post('/api/login', authLimiter, async (req, res) => {
     const { data: user } = await supabase.from('users').select('id,username,password').eq('username', username).maybeSingle();
 
     if (!user) {
-      // Auto-register
-      const { data: newUser, error } = await supabase.from('users').insert({ username, password }).select('id,username').single();
+      // Auto-register with hashed password
+      const hash = await bcrypt.hash(password, SALT_ROUNDS);
+      const { data: newUser, error } = await supabase.from('users').insert({ username, password: hash }).select('id,username').single();
       if (error) throw error;
       await giveStarterCreature(newUser.id);
       return res.json({ userId: newUser.id, username: newUser.username, isNewUser: true });
     }
 
-    if (user.password !== password) return res.status(401).json({ error: 'Incorrect password.' });
+    // Check password — supports both bcrypt hashes and legacy plain-text
+    const storedPw  = user.password || '';
+    const isHashed  = storedPw.startsWith('$2');
+    let   valid     = false;
+
+    if (isHashed) {
+      valid = await bcrypt.compare(password, storedPw);
+    } else {
+      // Legacy plain-text match
+      valid = storedPw === password;
+      if (valid) {
+        // Silently upgrade to hashed password
+        const hash = await bcrypt.hash(password, SALT_ROUNDS);
+        await supabase.from('users').update({ password: hash }).eq('id', user.id);
+      }
+    }
+
+    if (!valid) return res.status(401).json({ error: 'Incorrect password.' });
 
     // Kick any existing session for this user
     const oldSocketId = activeSessions.get(user.id);

@@ -63,6 +63,6 @@ Common → Uncommon → Rare → Epic → Legendary → Mythic → Divine → Ce
 
 ## Notes
 
-- Passwords are stored in plain text. Add bcrypt before a public launch.
+- Passwords are hashed with bcrypt (cost factor 12). Existing plain-text passwords are automatically upgraded on next login.
 - Sessions persist via localStorage. Logging in from a second tab/browser kicks the first session.
 - Rate limiting is active on login/register: 20 attempts per 15 minutes.
