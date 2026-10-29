@@ -68,6 +68,14 @@ class Game {
     this.camera         = { x: 0, y: 0 };
     this.particles      = [];
 
+    // inventory system
+    this.inventory      = [
+      { id: 'wooden_sword', name: 'Wooden Sword', icon: '🗡️', type: 'weapon' },
+      null, null, null, null
+    ];
+    this.activeSlot     = 0; // 0-indexed
+    this.money          = 0;
+
     // tutorial state
     this.tutorialStep   = -1; // -1 = not shown, 0..N = active
     this.tutorialDone   = false;
@@ -322,6 +330,14 @@ class Game {
     });
     document.getElementById('btn-store-pen').addEventListener('click', () => this._storeInBase());
     document.getElementById('btn-menu').addEventListener('click', () => this.stop());
+
+    // Hotbar slot switching with number keys
+    window.addEventListener('keydown', e => {
+      if (e.key >= '1' && e.key <= '5') {
+        this.activeSlot = parseInt(e.key) - 1;
+        this._updateNewHUD();
+      }
+    });
   }
 
   _tryFight() {
@@ -357,6 +373,7 @@ class Game {
 
     this._spawnWorldCreatures();
     this._updateHUD();
+    this._updateNewHUD();
 
     document.getElementById('hud-username').textContent   = session.username;
     document.getElementById('hud-lobby-name').textContent = lobbyName;
@@ -908,6 +925,35 @@ class Game {
     }
     document.getElementById('hud-player-count').textContent =
       `${this.otherPlayers.size + 1} / 20 players`;
+  }
+
+  _updateNewHUD() {
+    // Update money display
+    document.getElementById('hud-money').textContent = `Money $${this.money}`;
+
+    // Update hotbar
+    for (let i = 0; i < 5; i++) {
+      const slot = document.querySelector(`.hotbar-slot[data-slot="${i + 1}"]`);
+      const item = this.inventory[i];
+      const iconEl = slot.querySelector('.hotbar-slot-icon');
+      if (item) {
+        iconEl.textContent = item.icon;
+      } else {
+        iconEl.textContent = '';
+      }
+      slot.classList.toggle('active', i === this.activeSlot);
+    }
+
+    // Update equipped creature display
+    const c = this.myCreature;
+    if (c) {
+      document.getElementById('hud-equipped-name').textContent = c.name;
+      document.getElementById('hud-equipped-stats').textContent =
+        `ATK: ${c.attack} | DEF: ${c.defense} | SPD: ${c.speed}`;
+    } else {
+      document.getElementById('hud-equipped-name').textContent = 'No creature';
+      document.getElementById('hud-equipped-stats').textContent = '—';
+    }
   }
 
   // ── Store in base ─────────────────────────────────────────

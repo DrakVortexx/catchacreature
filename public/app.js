@@ -84,17 +84,6 @@ loginForm.addEventListener('submit', async e => {
 async function openDashboard() {
   showScreen('dashboard');
   document.getElementById('dash-username').textContent = session.username;
-  document.getElementById('dash-stats').textContent    = 'Loading…';
-  try {
-    const res  = await fetch(`/api/users/${session.userId}/stats`);
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    document.getElementById('dash-stats').textContent =
-      `${data.totalCaught} stored · ${data.battlesWon} wins`;
-    refreshBaseCount();
-  } catch {
-    document.getElementById('dash-stats').textContent = 'Could not load stats.';
-  }
 }
 window.openDashboard = openDashboard;
 
