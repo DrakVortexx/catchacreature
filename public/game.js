@@ -340,21 +340,10 @@ class Game {
       }
       if (e.key === 'Enter') {
         const ci = document.getElementById('chat-input');
-        if (document.activeElement !== ci) { ci.focus(); e.preventDefault(); }
+        if (ci && document.activeElement !== ci) { ci.focus(); e.preventDefault(); }
       }
     });
     window.addEventListener('keyup', e => { this.keys[e.key.toLowerCase()] = false; });
-
-    document.getElementById('chat-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        const msg = e.target.value.trim();
-        if (msg && this.socket) { this.socket.emit('lobby_chat', { message: msg }); }
-        e.target.value = '';
-        e.target.blur();
-        e.preventDefault();
-      }
-      if (e.key === 'Escape') e.target.blur();
-    });
 
     const btnFight = document.getElementById('btn-fight');
     if (btnFight) {
@@ -370,6 +359,20 @@ class Game {
     const btnMenu = document.getElementById('btn-menu');
     if (btnMenu) {
       btnMenu.addEventListener('click', () => this.stop());
+    }
+
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput) {
+      chatInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          const msg = e.target.value.trim();
+          if (msg && this.socket) { this.socket.emit('lobby_chat', { message: msg }); }
+          e.target.value = '';
+          e.target.blur();
+          e.preventDefault();
+        }
+        if (e.key === 'Escape') e.target.blur();
+      });
     }
 
     // Hotbar slot switching with number keys
@@ -400,9 +403,10 @@ class Game {
   async _loadCreatureGUI() {
     const equippedDiv = document.getElementById('gui-equipped-info');
     const baseDiv = document.getElementById('gui-base-creatures');
+    const btnDeposit = document.getElementById('btn-deposit-creature');
 
     // Show equipped creature
-    if (this.myCreature) {
+    if (this.myCreature && equippedDiv) {
       const c = this.myCreature;
       equippedDiv.innerHTML = `
         <div style="font-size:16px;font-weight:700;color:${RARITY_COLORS[c.rarity]};margin-bottom:8px;">${c.name}</div>
@@ -410,12 +414,13 @@ class Game {
         <div style="font-size:11px;color:var(--light);">ATK ${c.attack} · DEF ${c.defense} · SPD ${c.speed}</div>
         <div style="font-size:11px;color:var(--light);">HP ${c.hp}</div>
       `;
-    } else {
+    } else if (equippedDiv) {
       equippedDiv.innerHTML = '<p style="color:var(--gray);font-size:13px;">No creature equipped</p>';
-      document.getElementById('btn-deposit-creature').disabled = true;
     }
+    if (btnDeposit) btnDeposit.disabled = !this.myCreature;
 
     // Show base creatures (all non-equipped creatures)
+    if (!baseDiv) return;
     const baseCreatures = this.collection.filter(uc => uc.creature && !uc.is_active);
     if (baseCreatures.length === 0) {
       baseDiv.innerHTML = '<p style="color:var(--gray);font-size:13px;">No creatures in base</p>';
@@ -439,7 +444,8 @@ class Game {
   async _depositFromGUI() {
     if (!this.myCreature || this._depositing) return;
     this._depositing = true;
-    document.getElementById('btn-deposit-creature').disabled = true;
+    const btnDeposit = document.getElementById('btn-deposit-creature');
+    if (btnDeposit) btnDeposit.disabled = true;
 
     const creatureToDeposit = this.myCreature;
     try {
@@ -476,7 +482,7 @@ class Game {
       window.notify('Failed to deposit creature.', 'error');
     } finally {
       this._depositing = false;
-      document.getElementById('btn-deposit-creature').disabled = !this.myCreature;
+      if (btnDeposit) btnDeposit.disabled = !this.myCreature;
     }
   }
 
@@ -569,8 +575,10 @@ class Game {
     this._updateHUD();
     this._updateNewHUD();
 
-    document.getElementById('hud-username').textContent   = session.username;
-    document.getElementById('hud-lobby-name').textContent = lobbyName;
+    const hudUsername = document.getElementById('hud-username');
+    const hudLobbyName = document.getElementById('hud-lobby-name');
+    if (hudUsername) hudUsername.textContent   = session.username;
+    if (hudLobbyName) hudLobbyName.textContent = lobbyName;
 
     this.lastTime = performance.now();
     requestAnimationFrame(t => this._loop(t));
@@ -586,8 +594,10 @@ class Game {
   stop() {
     this.isRunning = false;
     if (this.socket) this.socket.emit('leave_lobby');
-    document.getElementById('game-screen').classList.add('hidden');
-    document.getElementById('hud').classList.add('hidden');
+    const gameScreen = document.getElementById('game-screen');
+    const hud = document.getElementById('hud');
+    if (gameScreen) gameScreen.classList.add('hidden');
+    if (hud) hud.classList.add('hidden');
     // Re-create game instance next time so world is fresh
     window.gameInst = null;
     window.openDashboard();
@@ -610,7 +620,8 @@ class Game {
     if (this.tutorialStep >= steps.length) {
       this.tutorialStep  = -1;
       this.tutorialDone  = true;
-      document.getElementById('tutorial-overlay').classList.add('hidden');
+      const tutorialOverlay = document.getElementById('tutorial-overlay');
+      if (tutorialOverlay) tutorialOverlay.classList.add('hidden');
     } else {
       this._renderTutorial();
     }
@@ -641,13 +652,18 @@ class Game {
     const ov    = document.getElementById('tutorial-overlay');
     const total = steps.length;
 
-    document.getElementById('tut-title').textContent = step.title;
-    document.getElementById('tut-body').innerHTML    = step.body;
-    document.getElementById('tut-step').textContent  = `${this.tutorialStep + 1} / ${total}`;
-    document.getElementById('tut-next').textContent  =
+    const tutTitle = document.getElementById('tut-title');
+    const tutBody = document.getElementById('tut-body');
+    const tutStep = document.getElementById('tut-step');
+    const tutNext = document.getElementById('tut-next');
+
+    if (tutTitle) tutTitle.textContent = step.title;
+    if (tutBody) tutBody.innerHTML    = step.body;
+    if (tutStep) tutStep.textContent  = `${this.tutorialStep + 1} / ${total}`;
+    if (tutNext) tutNext.textContent  =
       this.tutorialStep === total - 1 ? 'Let\'s Go! 🎮' : 'Next →';
 
-    ov.classList.remove('hidden');
+    if (ov) ov.classList.remove('hidden');
   }
 
   // ── Spawn world creatures ─────────────────────────────────
@@ -705,8 +721,9 @@ class Game {
     }
 
     // Block movement during tutorial or chat
+    const chatInput = document.getElementById('chat-input');
     const blocking = this.tutorialStep >= 0 ||
-      document.activeElement === document.getElementById('chat-input');
+      (chatInput && document.activeElement === chatInput);
 
     if (!blocking) {
       let dx = 0, dy = 0;
@@ -795,21 +812,28 @@ class Game {
       const d = Math.hypot(wc.x - this.player.x, wc.y - this.player.y);
       if (d < minD) { minD = d; this.nearbyCreature = wc; }
     }
-    document.getElementById('btn-fight').disabled = !this.nearbyCreature || !this.myCreature;
+    const btnFight = document.getElementById('btn-fight');
+    if (btnFight) btnFight.disabled = !this.nearbyCreature || !this.myCreature;
 
     // Base proximity — player is near their base if in lobby zone near bottom
     const FOREST_END = WORLD_H - LOBBY_H;
     const inLobby    = this.player.y / TILE > FOREST_END;
     const nearBase   = inLobby && this.player.y / TILE > (WORLD_H - 6);
-    document.getElementById('btn-store-pen').disabled = !this.myCreature || !nearBase;
-    document.getElementById('btn-store-pen').title    = nearBase
-      ? 'Store creature in your base (or press E)'
-      : 'Walk to your base (bottom of lobby) to store';
+    const btnStorePen = document.getElementById('btn-store-pen');
+    if (btnStorePen) {
+      btnStorePen.disabled = !this.myCreature || !nearBase;
+      btnStorePen.title    = nearBase
+        ? 'Store creature in your base (or press E)'
+        : 'Walk to your base (bottom of lobby) to store';
+    }
 
     const depth = Math.max(0, Math.floor((FOREST_END - this.player.y / TILE) * 5));
-    document.getElementById('hud-depth').textContent = nearBase
-      ? '🏠 At your base (Press E)'
-      : depth > 0 ? `Depth: ${depth}m` : 'Lobby';
+    const hudDepth = document.getElementById('hud-depth');
+    if (hudDepth) {
+      hudDepth.textContent = nearBase
+        ? '🏠 At your base (Press E)'
+        : depth > 0 ? `Depth: ${depth}m` : 'Lobby';
+    }
   }
 
   _walkable(wx, wy) {
@@ -1189,31 +1213,41 @@ class Game {
   // ── HUD ───────────────────────────────────────────────────
   _updateHUD() {
     const c = this.myCreature;
+    const hudCreatureName = document.getElementById('hud-creature-name');
+    const hudHpBar = document.getElementById('hud-hp-bar');
+    const hudHpText = document.getElementById('hud-hp-text');
+    const btnStorePen = document.getElementById('btn-store-pen');
+    const hudPlayerCount = document.getElementById('hud-player-count');
+
     if (c) {
-      document.getElementById('hud-creature-name').textContent = c.name;
+      if (hudCreatureName) hudCreatureName.textContent = c.name;
       const pct = Math.max(0, c.currentHp / c.hp * 100);
-      const bar = document.getElementById('hud-hp-bar');
-      bar.style.width      = pct + '%';
-      bar.style.background = pct > 50 ? '#10b981' : pct > 25 ? '#f59e0b' : '#ef4444';
-      document.getElementById('hud-hp-text').textContent = `HP: ${c.currentHp} / ${c.hp}`;
-      document.getElementById('btn-store-pen').disabled  = false;
+      if (hudHpBar) {
+        hudHpBar.style.width      = pct + '%';
+        hudHpBar.style.background = pct > 50 ? '#10b981' : pct > 25 ? '#f59e0b' : '#ef4444';
+      }
+      if (hudHpText) hudHpText.textContent = `HP: ${c.currentHp} / ${c.hp}`;
+      if (btnStorePen) btnStorePen.disabled  = false;
     } else {
-      document.getElementById('hud-creature-name').textContent = 'No creature';
-      document.getElementById('hud-hp-bar').style.width = '0%';
-      document.getElementById('hud-hp-text').textContent = '';
-      document.getElementById('btn-store-pen').disabled  = true;
+      if (hudCreatureName) hudCreatureName.textContent = 'No creature';
+      if (hudHpBar) hudHpBar.style.width = '0%';
+      if (hudHpText) hudHpText.textContent = '';
+      if (btnStorePen) btnStorePen.disabled  = true;
     }
-    document.getElementById('hud-player-count').textContent =
-      `${this.otherPlayers.size + 1} / 8 players`;
+    if (hudPlayerCount) {
+      hudPlayerCount.textContent = `${this.otherPlayers.size + 1} / 8 players`;
+    }
   }
 
   _updateNewHUD() {
     // Update money display
-    document.getElementById('hud-money').textContent = `Money $${this.money}`;
+    const hudMoney = document.getElementById('hud-money');
+    if (hudMoney) hudMoney.textContent = `Money $${this.money}`;
 
     // Update hotbar
     for (let i = 0; i < 5; i++) {
       const slot = document.querySelector(`.hotbar-slot[data-slot="${i + 1}"]`);
+      if (!slot) continue;
       const item = this.inventory[i];
       const iconEl = slot.querySelector('.hotbar-slot-icon');
       if (item) {
@@ -1226,13 +1260,15 @@ class Game {
 
     // Update equipped creature display
     const c = this.myCreature;
+    const hudEquippedName = document.getElementById('hud-equipped-name');
+    const hudEquippedStats = document.getElementById('hud-equipped-stats');
     if (c) {
-      document.getElementById('hud-equipped-name').textContent = c.name;
-      document.getElementById('hud-equipped-stats').textContent =
+      if (hudEquippedName) hudEquippedName.textContent = c.name;
+      if (hudEquippedStats) hudEquippedStats.textContent =
         `ATK: ${c.attack} | DEF: ${c.defense} | SPD: ${c.speed}`;
     } else {
-      document.getElementById('hud-equipped-name').textContent = 'No creature';
-      document.getElementById('hud-equipped-stats').textContent = '—';
+      if (hudEquippedName) hudEquippedName.textContent = 'No creature';
+      if (hudEquippedStats) hudEquippedStats.textContent = '—';
     }
   }
 
@@ -1240,7 +1276,8 @@ class Game {
   async _storeInBase() {
     if (!this.myCreature || this._storingPen) return;
     this._storingPen = true;
-    document.getElementById('btn-store-pen').disabled = true;
+    const btnStorePen = document.getElementById('btn-store-pen');
+    if (btnStorePen) btnStorePen.disabled = true;
 
     const creatureToStore = this.myCreature;
     try {
@@ -1266,6 +1303,7 @@ class Game {
       window.notify(`Failed to store: ${e.message}`, 'error');
     } finally {
       this._storingPen = false;
+      if (btnStorePen) btnStorePen.disabled = !this.myCreature;
     }
   }
 
@@ -1295,34 +1333,52 @@ class Game {
     this._clearLog();
     this._log(`A wild ${enemy.name} appeared!`);
 
-    document.getElementById('battle-screen').classList.remove('hidden');
-    document.getElementById('btn-attack').disabled = false;
-    document.getElementById('btn-run').textContent = 'Run Away';
-    document.getElementById('btn-attack').onclick  = () => this._doAttack();
-    document.getElementById('btn-run').onclick     = () => this._doRun();
+    const battleScreen = document.getElementById('battle-screen');
+    const btnAttack = document.getElementById('btn-attack');
+    const btnRun = document.getElementById('btn-run');
+
+    if (battleScreen) battleScreen.classList.remove('hidden');
+    if (btnAttack) {
+      btnAttack.disabled = false;
+      btnAttack.onclick  = () => this._doAttack();
+    }
+    if (btnRun) {
+      btnRun.textContent = 'Run Away';
+      btnRun.onclick     = () => this._doRun();
+    }
   }
 
   _setBattleUI(p, e) {
     const setR = (id, pct) => {
       const el = document.getElementById(id);
-      el.style.width      = pct + '%';
-      el.style.background = pct > 50 ? '#10b981' : pct > 25 ? '#f59e0b' : '#ef4444';
+      if (el) {
+        el.style.width      = pct + '%';
+        el.style.background = pct > 50 ? '#10b981' : pct > 25 ? '#f59e0b' : '#ef4444';
+      }
     };
-    document.getElementById('bp-name').textContent  = p.name;
-    document.getElementById('bp-hp').textContent    = `HP: ${p.currentHp} / ${p.hp}`;
-    document.getElementById('bp-stats').innerHTML   = `ATK ${p.attack} · DEF ${p.defense} · SPD ${p.speed}<br><em>${p.special_ability}</em>`;
+
+    const bpName = document.getElementById('bp-name');
+    const bpHp = document.getElementById('bp-hp');
+    const bpStats = document.getElementById('bp-stats');
+    const beName = document.getElementById('be-name');
+    const beHp = document.getElementById('be-hp');
+    const beStats = document.getElementById('be-stats');
+
+    if (bpName) bpName.textContent  = p.name;
+    if (bpHp) bpHp.textContent    = `HP: ${p.currentHp} / ${p.hp}`;
+    if (bpStats) bpStats.innerHTML   = `ATK ${p.attack} · DEF ${p.defense} · SPD ${p.speed}<br><em>${p.special_ability}</em>`;
     setR('bp-hp-bar', p.currentHp / p.hp * 100);
 
-    document.getElementById('be-name').textContent  = e.name;
-    document.getElementById('be-hp').textContent    = `HP: ${e.currentHp} / ${e.hp}`;
-    document.getElementById('be-stats').innerHTML   = `ATK ${e.attack} · DEF ${e.defense} · SPD ${e.speed}<br><em>${e.special_ability}</em>`;
+    if (beName) beName.textContent  = e.name;
+    if (beHp) beHp.textContent    = `HP: ${e.currentHp} / ${e.hp}`;
+    if (beStats) beStats.innerHTML   = `ATK ${e.attack} · DEF ${e.defense} · SPD ${e.speed}<br><em>${e.special_ability}</em>`;
     setR('be-hp-bar', e.currentHp / e.hp * 100);
 
     // Creature color badges
     const bpCol = RARITY_COLORS[p.rarity] || '#fff';
     const beCol = RARITY_COLORS[e.rarity] || '#fff';
-    document.getElementById('bp-name').style.color = bpCol;
-    document.getElementById('be-name').style.color = beCol;
+    if (bpName) bpName.style.color = bpCol;
+    if (beName) beName.style.color = beCol;
   }
 
   _log(msg, cls) {
@@ -1330,14 +1386,20 @@ class Game {
     if (cls) p.className = cls;
     p.textContent = msg;
     const log = document.getElementById('battle-log');
-    log.appendChild(p);
-    log.scrollTop = log.scrollHeight;
+    if (log) {
+      log.appendChild(p);
+      log.scrollTop = log.scrollHeight;
+    }
   }
-  _clearLog() { document.getElementById('battle-log').innerHTML = ''; }
+  _clearLog() {
+    const log = document.getElementById('battle-log');
+    if (log) log.innerHTML = '';
+  }
 
   _doAttack() {
     if (this._battleOver) return;
-    document.getElementById('btn-attack').disabled = true;
+    const btnAttack = document.getElementById('btn-attack');
+    if (btnAttack) btnAttack.disabled = true;
     const pl = this.myCreature, en = this._currentEnemy;
 
     const pdmg = Math.max(1, pl.attack - Math.floor(en.defense*0.4) + Math.floor(Math.random()*6));
@@ -1346,11 +1408,14 @@ class Game {
 
     const setR = (id, pct) => {
       const el = document.getElementById(id);
-      el.style.width = Math.max(0,pct) + '%';
-      el.style.background = pct > 50 ? '#10b981' : pct > 25 ? '#f59e0b' : '#ef4444';
+      if (el) {
+        el.style.width = Math.max(0,pct) + '%';
+        el.style.background = pct > 50 ? '#10b981' : pct > 25 ? '#f59e0b' : '#ef4444';
+      }
     };
     setR('be-hp-bar', en.currentHp / en.hp * 100);
-    document.getElementById('be-hp').textContent = `HP: ${en.currentHp} / ${en.hp}`;
+    const beHp = document.getElementById('be-hp');
+    if (beHp) beHp.textContent = `HP: ${en.currentHp} / ${en.hp}`;
 
     if (en.currentHp <= 0) { this._log(`${en.name} fainted! You win! 🎉`, 'good'); this._winBattle(); return; }
 
@@ -1362,43 +1427,53 @@ class Game {
     pl.currentHp = Math.max(0, pl.currentHp - edmg);
     this._log(`${en.name} attacks for ${edmg} damage!`, 'bad');
     setR('bp-hp-bar', pl.currentHp / pl.hp * 100);
-    document.getElementById('bp-hp').textContent = `HP: ${pl.currentHp} / ${pl.hp}`;
+    const bpHp = document.getElementById('bp-hp');
+    if (bpHp) bpHp.textContent = `HP: ${pl.currentHp} / ${pl.hp}`;
     this._updateHUD();
 
     if (pl.currentHp <= 0) { this._log(`${pl.name} fainted! You lose.`, 'bad'); this._loseBattle(); return; }
-    document.getElementById('btn-attack').disabled = false;
+    if (btnAttack) btnAttack.disabled = false;
   }
 
   _doRun() { this._endBattle(); window.notify('Got away safely!', 'info'); }
 
   _winBattle() {
     this._battleOver = true;
-    document.getElementById('btn-attack').disabled = true;
-    document.getElementById('btn-run').textContent = '✅ Take Creature';
-    document.getElementById('btn-run').onclick = () => {
-      const prev = this.myCreature?.name;
-      this.myCreature = { ...this._currentEnemy, currentHp: this._currentEnemy.currentHp };
-      if (this._currentWC) this._currentWC.dead = true;
-      this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[this.myCreature.rarity]);
-      window.notify(`Caught ${this.myCreature.name}!${prev ? ` Replaced ${prev}.` : ''} Walk to your base to store it!`, 'success');
-      this._updateHUD();
-      this._endBattle();
-    };
+    const btnAttack = document.getElementById('btn-attack');
+    const btnRun = document.getElementById('btn-run');
+    if (btnAttack) btnAttack.disabled = true;
+    if (btnRun) {
+      btnRun.textContent = '✅ Take Creature';
+      btnRun.onclick = () => {
+        const prev = this.myCreature?.name;
+        this.myCreature = { ...this._currentEnemy, currentHp: this._currentEnemy.currentHp };
+        if (this._currentWC) this._currentWC.dead = true;
+        this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[this.myCreature.rarity]);
+        window.notify(`Caught ${this.myCreature.name}!${prev ? ` Replaced ${prev}.` : ''} Walk to your base to store it!`, 'success');
+        this._updateHUD();
+        this._endBattle();
+      };
+    }
   }
 
   _loseBattle() {
     this._battleOver = true;
     this.myCreature.currentHp = this.myCreature.hp;
     this._updateHUD();
-    document.getElementById('btn-attack').disabled = true;
-    document.getElementById('btn-run').textContent = 'Continue';
-    document.getElementById('btn-run').onclick = () => this._endBattle();
+    const btnAttack = document.getElementById('btn-attack');
+    const btnRun = document.getElementById('btn-run');
+    if (btnAttack) btnAttack.disabled = true;
+    if (btnRun) {
+      btnRun.textContent = 'Continue';
+      btnRun.onclick = () => this._endBattle();
+    }
     window.notify('Defeated! Your creature was healed.', 'info');
   }
 
   _endBattle() {
     this._battleOver = true;
-    document.getElementById('battle-screen').classList.add('hidden');
+    const battleScreen = document.getElementById('battle-screen');
+    if (battleScreen) battleScreen.classList.add('hidden');
     this.isRunning = true;
     this.lastTime  = performance.now();
     requestAnimationFrame(t => this._loop(t));
@@ -1439,7 +1514,10 @@ class Game {
   _addChat(msg) {
     const el = document.createElement('div'); el.textContent = msg;
     const box = document.getElementById('chat-messages');
-    box.appendChild(el); box.scrollTop = box.scrollHeight;
+    if (box) {
+      box.appendChild(el);
+      box.scrollTop = box.scrollHeight;
+    }
   }
 }
 
