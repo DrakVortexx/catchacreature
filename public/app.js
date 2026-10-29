@@ -127,16 +127,24 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 document.getElementById('btn-play').addEventListener('click', () => joinLobby(null));
 
 async function joinLobby(lobbyId) {
+  if (!session) { notify('Please log in first.', 'error'); return; }
   try {
     const res  = await fetch('/api/lobbies/join', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lobbyId })
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      notify(data.error || 'Could not join lobby.', 'error');
+      return;
+    }
     const data = await res.json();
-    if (!res.ok) { notify(data.error || 'Could not join lobby.', 'error'); return; }
     hideModal('server-browser');
     await startGame(data.lobbyId, data.lobbyName);
-  } catch { notify('Server error joining lobby.', 'error'); }
+  } catch (e) {
+    console.error('Lobby join error:', e);
+    notify('Server error joining lobby.', 'error');
+  }
 }
 
 async function startGame(lobbyId, lobbyName) {
