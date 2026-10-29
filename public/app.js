@@ -142,17 +142,21 @@ async function refreshBaseCount() {
 }
 window.refreshPenCount = refreshBaseCount; // game.js calls this name
 
-document.getElementById('btn-logout').addEventListener('click', () => {
-  session = null;
-  localStorage.removeItem('cacSession');
-  socket?.disconnect(); socket = null;
-  window.gameInst = null;
-  showScreen('login-screen');
-  notify('Logged out.', 'info');
-});
+const btnLogout = document.getElementById('btn-logout');
+if (btnLogout) {
+  btnLogout.addEventListener('click', () => {
+    session = null;
+    localStorage.removeItem('cacSession');
+    socket?.disconnect(); socket = null;
+    window.gameInst = null;
+    showScreen('login-screen');
+    notify('Logged out.', 'info');
+  });
+}
 
 // ── Quick Play ────────────────────────────────────────────
-document.getElementById('btn-play').addEventListener('click', () => joinLobby(null));
+const btnPlay = document.getElementById('btn-play');
+if (btnPlay) btnPlay.addEventListener('click', () => joinLobby(null));
 
 async function joinLobby(lobbyId) {
   if (!session) { notify('Please log in first.', 'error'); return; }
@@ -219,10 +223,14 @@ async function startGame(lobbyId, lobbyName) {
 }
 
 // ── Server Browser ────────────────────────────────────────
-document.getElementById('btn-servers').addEventListener('click', async () => {
-  showModal('server-browser'); await loadLobbies();
-});
-document.getElementById('btn-close-servers').addEventListener('click', () => hideModal('server-browser'));
+const btnServers = document.getElementById('btn-servers');
+if (btnServers) {
+  btnServers.addEventListener('click', async () => {
+    showModal('server-browser'); await loadLobbies();
+  });
+}
+const btnCloseServers = document.getElementById('btn-close-servers');
+if (btnCloseServers) btnCloseServers.addEventListener('click', () => hideModal('server-browser'));
 
 async function loadLobbies() {
   const list = document.getElementById('lobby-list');
@@ -251,10 +259,14 @@ async function loadLobbies() {
 function openBaseModal() { showModal('pen-modal'); loadBase(); }
 window.openPenModal = openBaseModal;
 
-document.getElementById('btn-pen').addEventListener('click', openBaseModal);
-document.getElementById('btn-close-pen').addEventListener('click', () => hideModal('pen-modal'));
-document.getElementById('rarity-filter').addEventListener('change', () => renderBase());
-document.getElementById('search-creatures').addEventListener('input',  () => renderBase());
+const btnPen = document.getElementById('btn-pen');
+if (btnPen) btnPen.addEventListener('click', openBaseModal);
+const btnClosePen = document.getElementById('btn-close-pen');
+if (btnClosePen) btnClosePen.addEventListener('click', () => hideModal('pen-modal'));
+const rarityFilter = document.getElementById('rarity-filter');
+if (rarityFilter) rarityFilter.addEventListener('change', () => renderBase());
+const searchCreatures = document.getElementById('search-creatures');
+if (searchCreatures) searchCreatures.addEventListener('input',  () => renderBase());
 
 let _baseCreatures = [];
 
@@ -315,14 +327,20 @@ function rarityColor(r) {
 }
 
 // ── Settings ──────────────────────────────────────────────
-document.getElementById('btn-settings').addEventListener('click', () => showModal('settings-modal'));
-document.getElementById('btn-close-settings').addEventListener('click', () => hideModal('settings-modal'));
+const btnSettings = document.getElementById('btn-settings');
+if (btnSettings) btnSettings.addEventListener('click', () => showModal('settings-modal'));
+const btnCloseSettings = document.getElementById('btn-close-settings');
+if (btnCloseSettings) btnCloseSettings.addEventListener('click', () => hideModal('settings-modal'));
 
 // ── Creature GUI ─────────────────────────────────────────
-document.getElementById('btn-close-creature-gui').addEventListener('click', () => hideModal('creature-gui-modal'));
-document.getElementById('btn-deposit-creature').addEventListener('click', () => {
-  if (window.gameInst) window.gameInst._depositFromGUI();
-});
+const btnCloseCreatureGui = document.getElementById('btn-close-creature-gui');
+if (btnCloseCreatureGui) btnCloseCreatureGui.addEventListener('click', () => hideModal('creature-gui-modal'));
+const btnDepositCreature = document.getElementById('btn-deposit-creature');
+if (btnDepositCreature) {
+  btnDepositCreature.addEventListener('click', () => {
+    if (window.gameInst) window.gameInst._depositFromGUI();
+  });
+}
 
 function openCreatureGUI() {
   showModal('creature-gui-modal');
@@ -331,13 +349,8 @@ function openCreatureGUI() {
 window.openCreatureGUI = openCreatureGUI;
 
 // ── Tutorial wiring ───────────────────────────────────────
-document.getElementById('tut-next').addEventListener('click', () => window.gameInst?._advanceTutorial());
-document.getElementById('tut-skip').addEventListener('click', () => {
-  if (window.gameInst) {
-    window.gameInst.tutorialStep = -1;
-    document.getElementById('tutorial-overlay').classList.add('hidden');
-  }
-});
+const tutNext = document.getElementById('tut-next');
+if (tutNext) tutNext.addEventListener('click', () => window.gameInst?._advanceTutorial());
 
 // ── Error screen retry ────────────────────────────────────
 document.getElementById('btn-error-retry')?.addEventListener('click', () => {
