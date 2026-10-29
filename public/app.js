@@ -133,12 +133,15 @@ async function joinLobby(lobbyId) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lobbyId })
     });
+    console.log('Lobby join response status:', res.status);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
+      console.error('Lobby join error response:', data);
       notify(data.error || 'Could not join lobby.', 'error');
       return;
     }
     const data = await res.json();
+    console.log('Lobby join success:', data);
     hideModal('server-browser');
     await startGame(data.lobbyId, data.lobbyName);
   } catch (e) {
@@ -148,35 +151,43 @@ async function joinLobby(lobbyId) {
 }
 
 async function startGame(lobbyId, lobbyName) {
-  const [crRes, colRes] = await Promise.all([
-    fetch('/api/creatures'),
-    fetch(`/api/users/${session.userId}/creatures`)
-  ]);
-  const creatures  = await crRes.json();
-  const collection = colRes.ok ? await colRes.json() : [];
-  if (!colRes.ok) notify('⚠️ Could not load creatures — check DB permissions.', 'error');
+  try {
+    console.log('Starting game with lobby:', lobbyId, lobbyName);
+    const [crRes, colRes] = await Promise.all([
+      fetch('/api/creatures'),
+      fetch(`/api/users/${session.userId}/creatures`)
+    ]);
+    console.log('Creatures response status:', crRes.status);
+    console.log('Collection response status:', colRes.status);
+    const creatures  = await crRes.json();
+    const collection = colRes.ok ? await colRes.json() : [];
+    if (!colRes.ok) notify('⚠️ Could not load creatures — check DB permissions.', 'error');
 
-  window.gameInst = new Game();
-  showScreen('game-screen');
-  document.getElementById('hud').classList.remove('hidden');
+    window.gameInst = new Game();
+    showScreen('game-screen');
+    document.getElementById('hud').classList.remove('hidden');
 
-  if (!socket || !socket.connected) socket = io();
+    if (!socket || !socket.connected) socket = io();
 
-  // Register session for single-session enforcement server-side
-  socket.emit('register_session', { userId: session.userId, username: session.username });
+    // Register session for single-session enforcement server-side
+    socket.emit('register_session', { userId: session.userId, username: session.username });
 
-  // Handle being kicked (same account opened elsewhere)
-  socket.off('kicked');
-  socket.on('kicked', (reason) => {
-    window.gameInst?.stop?.();
-    socket.disconnect();
-    showError(reason || 'You were disconnected because your account was opened elsewhere.');
-  });
+    // Handle being kicked (same account opened elsewhere)
+    socket.off('kicked');
+    socket.on('kicked', (reason) => {
+      window.gameInst?.stop?.();
+      socket.disconnect();
+      showError(reason || 'You were disconnected because your account was opened elsewhere.');
+    });
 
-  window.gameInst.connectSocket(socket);
-  socket.emit('join_lobby', { lobbyId, userId: session.userId, username: session.username });
-  window.gameInst.start(session, lobbyId, lobbyName, creatures, collection, session.isNewUser);
-  notify(`Joined ${lobbyName}!`, 'success');
+    window.gameInst.connectSocket(socket);
+    socket.emit('join_lobby', { lobbyId, userId: session.userId, username: session.username });
+    window.gameInst.start(session, lobbyId, lobbyName, creatures, collection, session.isNewUser);
+    notify(`Joined ${lobbyName}!`, 'success');
+  } catch (e) {
+    console.error('Start game error:', e);
+    notify('Error starting game.', 'error');
+  }
 }
 
 // ── Server Browser ────────────────────────────────────────

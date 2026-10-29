@@ -243,8 +243,10 @@ app.get('/api/lobbies', (req, res) => {
 });
 
 app.post('/api/lobbies/join', (req, res) => {
+  console.log('Lobby join request:', req.body);
   const lobby = getOrCreateLobby(req.body.lobbyId);
   if (!lobby) return res.status(503).json({ error: 'All lobbies are full.' });
+  console.log('Lobby found:', lobby.id, lobby.name);
   res.json({ lobbyId: lobby.id, lobbyName: lobby.name });
 });
 
