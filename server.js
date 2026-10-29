@@ -123,11 +123,18 @@ app.post('/api/login', async (req, res) => {
 
 async function giveStarterCreature(userId) {
   try {
+    // Guard: only give starter if user has no creatures yet
+    const { count } = await supabase
+      .from('user_creatures')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+    if (count && count > 0) return; // already has creatures
+
     await supabase.from('user_creatures').insert({
-      user_id: userId,
+      user_id:     userId,
       creature_id: 'c0',
-      is_active: true,
-      current_hp: 60
+      is_active:   true,
+      current_hp:  60
     });
   } catch (e) {
     console.error('Starter creature error:', e.message);

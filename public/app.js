@@ -46,9 +46,11 @@ loginForm.addEventListener('submit', async e => {
     const data = await res.json();
     if (!res.ok) { loginError.textContent = data.error || 'Login failed.'; return; }
 
-    session = { userId: data.userId, username: data.username, isNewUser: data.isNewUser };
+    session = { userId: data.userId, username: data.username };
     sessionStorage.setItem('cacSession', JSON.stringify(session));
-    notify(data.isNewUser ? '🎉 Account created! Welcome!' : `Welcome back, ${data.username}!`, 'success');
+    const isNew = data.isNewUser;
+    notify(isNew ? '🎉 Account created! Welcome!' : `Welcome back, ${data.username}!`, 'success');
+    session.isNewUser = isNew; // keep in memory only, not persisted
     openDashboard();
   } catch { loginError.textContent = 'Server error. Try again.'; }
   finally { loginBtn.disabled = false; loginBtn.textContent = 'Enter World'; }

@@ -74,53 +74,59 @@ class Game {
 
     const rng = mulberry32(42);
     this.tiles = this._generateWorld(rng);
-    this._offscreen = this._buildOffscreen();
+    this._offscreen    = this._buildOffscreen();
+    this._minimapCache = this._buildMinimapCache(); // pre-rendered static minimap layer
 
     this._bindInputs();
   }
 
   // ── World generation ──────────────────────────────────────
+  // Layout matches wireframe: forest fills the top of the world,
+  // wavy grass border separates it from the lobby, bases are at the bottom.
+  // Player STARTS in the lobby (south) and walks NORTH into the forest.
   _generateWorld(rng) {
     const tiles = Array.from({ length: WORLD_H }, () => new Uint8Array(WORLD_W));
-    // 0=grass, 1=dirt path, 2=tree, 3=stone floor, 4=water, 5=dense grass, 6=flowers
+    // 0=grass, 1=dirt path, 2=tree, 3=stone floor, 5=dense grass, 6=flowers
+    // No tile-4 water blocking — border is purely visual
 
-    // Lobby stone floor
-    for (let y = 0; y < LOBBY_H; y++)
-      for (let x = 0; x < WORLD_W; x++)
-        tiles[y][x] = 3;
+    const FOREST_END = WORLD_H - LOBBY_H; // lobby occupies the BOTTOM rows
 
-    // Border water row
-    for (let x = 0; x < WORLD_W; x++) { tiles[LOBBY_H][x] = 4; }
+    // ── Forest (top) ─────────────────────────────────
+    for (let y = 0; y < FOREST_END; y++) {
+      for (let x = 0; x < WORLD_W; x++) {
+        if (tiles[y][x] !== 0) continue;
+        const r = rng();
+        if      (r < 0.20) tiles[y][x] = 2; // tree
+        else if (r < 0.28) tiles[y][x] = 5; // dense grass
+        else if (r < 0.32) tiles[y][x] = 6; // flowers
+      }
+    }
 
-    // Main vertical path through forest
+    // Main vertical path through forest (centre)
     const mx = Math.floor(WORLD_W / 2);
-    for (let y = LOBBY_H + 1; y < WORLD_H; y++) {
+    for (let y = 0; y < FOREST_END; y++) {
       tiles[y][mx]   = 1;
       tiles[y][mx+1] = 1;
     }
 
-    // Horizontal branch paths every 20 tiles
-    for (let py = LOBBY_H + 10; py < WORLD_H - 5; py += 20) {
+    // Horizontal branch paths every 20 tiles in forest
+    for (let py = 10; py < FOREST_END - 5; py += 20) {
       for (let x = 0; x < WORLD_W; x++) tiles[py][x] = 1;
     }
 
-    // Forest tiles
-    for (let y = LOBBY_H + 1; y < WORLD_H; y++) {
-      for (let x = 0; x < WORLD_W; x++) {
-        if (tiles[y][x] !== 0) continue;
-        const r = rng();
-        if      (r < 0.18) tiles[y][x] = 2; // tree
-        else if (r < 0.26) tiles[y][x] = 5; // dense grass
-        else if (r < 0.30) tiles[y][x] = 6; // flowers
-      }
-    }
+    // ── Lobby (bottom) ────────────────────────────────
+    for (let y = FOREST_END; y < WORLD_H; y++)
+      for (let x = 0; x < WORLD_W; x++)
+        tiles[y][x] = 3;
 
-    // Lobby structures (cleared stone)
-    this._fillTiles(tiles, 2, 2, 7, 5, 3);           // Store
-    this._fillTiles(tiles, WORLD_W-10, 2, 7, 7, 3);  // Portal
-    this._fillTiles(tiles, WORLD_W-10, 10, 7, 3, 3); // Training
+    // 7 player bases at the very bottom
     for (let i = 0; i < 7; i++)
-      this._fillTiles(tiles, 2 + i*8, LOBBY_H-4, 6, 3, 3); // Bases
+      this._fillTiles(tiles, 2 + i * 8, WORLD_H - 4, 6, 4, 3);
+
+    // Lobby structures
+    this._fillTiles(tiles, 2, FOREST_END + 2, 7, 5, 3);           // Store
+    this._fillTiles(tiles, WORLD_W-10, FOREST_END + 2, 7, 7, 3);  // Portal
+    this._fillTiles(tiles, WORLD_W-10, FOREST_END + 10, 7, 3, 3); // Training
 
     return tiles;
   }
@@ -131,101 +137,158 @@ class Game {
         if (y+dy < WORLD_H && x+dx < WORLD_W) tiles[y+dy][x+dx] = val;
   }
 
-  // Pre-render static tile layer to offscreen canvas for perf
+  // Pre-render static tile layer to offscreen canvas (called once)
   _buildOffscreen() {
     const oc  = document.createElement('canvas');
     oc.width  = WORLD_W * TILE;
     oc.height = WORLD_H * TILE;
     const ctx = oc.getContext('2d');
-    const rng = mulberry32(99); // different seed for visual variation
+    const rng = mulberry32(99);
+    const FOREST_END = WORLD_H - LOBBY_H;
 
     for (let ty = 0; ty < WORLD_H; ty++) {
       for (let tx = 0; tx < WORLD_W; tx++) {
         const t  = this.tiles[ty][tx];
         const px = tx * TILE, py = ty * TILE;
 
-        // Base fill
         if      (t === 0) { ctx.fillStyle = rng() < 0.15 ? '#3d8b47' : '#4a9e52'; }
         else if (t === 1) { ctx.fillStyle = rng() < 0.2  ? '#b0916e' : '#c4a882'; }
-        else if (t === 2) { ctx.fillStyle = '#3a7a40'; } // under tree
+        else if (t === 2) { ctx.fillStyle = '#3a7a40'; }
         else if (t === 3) { ctx.fillStyle = rng() < 0.1  ? '#636e7a' : '#6b7685'; }
-        else if (t === 4) { ctx.fillStyle = '#1e4fa3'; }
         else if (t === 5) { ctx.fillStyle = '#3a7a40'; }
         else if (t === 6) { ctx.fillStyle = '#4a9e52'; }
+        else              { ctx.fillStyle = '#4a9e52'; }
         ctx.fillRect(px, py, TILE, TILE);
 
-        // Tile-specific detail
-        if (t === 1) { // path edge highlight
+        if (t === 1) {
           ctx.fillStyle = 'rgba(255,255,255,0.06)';
           ctx.fillRect(px, py, TILE, 2);
         }
-        if (t === 3) { // stone tile grout lines
-          ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-          ctx.lineWidth   = 1;
+        if (t === 3) {
+          ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1;
           ctx.strokeRect(px+0.5, py+0.5, TILE-1, TILE-1);
           ctx.fillStyle = 'rgba(255,255,255,0.04)';
           ctx.fillRect(px+1, py+1, TILE/2-2, TILE/2-2);
         }
-        if (t === 4) { // water shimmer
-          ctx.fillStyle = 'rgba(100,180,255,0.25)';
-          ctx.fillRect(px + TILE*0.1, py + TILE*0.3, TILE*0.8, TILE*0.15);
-        }
-        if (t === 5) { // dense grass tufts
+        if (t === 5) {
           ctx.fillStyle = '#2a6b30';
-          for (let i = 0; i < 4; i++) {
-            const gx = px + 6 + i*10, gy = py + 20 + (i%2)*8;
-            ctx.fillRect(gx, gy, 3, 10);
-          }
+          for (let i = 0; i < 4; i++) ctx.fillRect(px+6+i*10, py+20+(i%2)*8, 3, 10);
         }
-        if (t === 6) { // flowers
+        if (t === 6) {
           const fc = ['#ff6b8a','#ffd166','#a8d8ff','#c3ff8a'];
           for (let i = 0; i < 3; i++) {
             ctx.fillStyle = fc[(tx*3+ty+i) % fc.length];
-            ctx.beginPath();
-            ctx.arc(px+10+i*14, py+24+((i+tx)%2)*8, 4, 0, Math.PI*2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(px+10+i*14, py+24+((i+tx)%2)*8, 4, 0, Math.PI*2); ctx.fill();
           }
         }
-
-        // Trees drawn on top
         if (t === 2) {
-          // Shadow
           ctx.fillStyle = 'rgba(0,0,0,0.2)';
-          ctx.beginPath();
-          ctx.ellipse(px+TILE/2+4, py+TILE-6, 14, 6, 0, 0, Math.PI*2);
-          ctx.fill();
-          // Trunk
+          ctx.beginPath(); ctx.ellipse(px+TILE/2+4, py+TILE-6, 14, 6, 0, 0, Math.PI*2); ctx.fill();
           ctx.fillStyle = '#6b3a1f';
           ctx.fillRect(px+TILE/2-5, py+TILE-20, 10, 20);
-          // Canopy layers
           ctx.fillStyle = '#1d5c25';
-          ctx.beginPath();
-          ctx.arc(px+TILE/2, py+TILE-28, 18, 0, Math.PI*2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(px+TILE/2, py+TILE-28, 18, 0, Math.PI*2); ctx.fill();
           ctx.fillStyle = '#267a30';
-          ctx.beginPath();
-          ctx.arc(px+TILE/2-4, py+TILE-34, 14, 0, Math.PI*2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(px+TILE/2-4, py+TILE-34, 14, 0, Math.PI*2); ctx.fill();
           ctx.fillStyle = '#2e9438';
-          ctx.beginPath();
-          ctx.arc(px+TILE/2+2, py+TILE-38, 11, 0, Math.PI*2);
-          ctx.fill();
-          // Highlight
+          ctx.beginPath(); ctx.arc(px+TILE/2+2, py+TILE-38, 11, 0, Math.PI*2); ctx.fill();
           ctx.fillStyle = 'rgba(255,255,255,0.08)';
-          ctx.beginPath();
-          ctx.arc(px+TILE/2-6, py+TILE-42, 6, 0, Math.PI*2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(px+TILE/2-6, py+TILE-42, 6, 0, Math.PI*2); ctx.fill();
         }
       }
     }
 
-    // Zone depth fog — lobby is bright, deep forest is dark
-    for (let ty = LOBBY_H + 1; ty < WORLD_H; ty++) {
-      const depth  = (ty - LOBBY_H) / (WORLD_H - LOBBY_H);
-      const alpha  = Math.min(0.55, depth * 0.7);
-      ctx.fillStyle = `rgba(0,10,5,${alpha})`;
+    // Depth fog — darkens further from lobby (ty=0 is deepest forest)
+    for (let ty = 0; ty < FOREST_END; ty++) {
+      const depth = (FOREST_END - ty) / FOREST_END;
+      const alpha = Math.min(0.55, depth * 0.65);
+      ctx.fillStyle = `rgba(0,8,4,${alpha})`;
       ctx.fillRect(0, ty * TILE, WORLD_W * TILE, TILE);
     }
+
+    // Wavy grass border between forest and lobby
+    const borderY = FOREST_END * TILE;
+    ctx.fillStyle = '#2d5a20';
+    ctx.beginPath();
+    ctx.moveTo(0, borderY);
+    // Wavy top edge of the border strip
+    const steps = WORLD_W * TILE;
+    for (let x = 0; x <= steps; x += 8) {
+      const wave = Math.sin(x * 0.018) * 12 + Math.sin(x * 0.042 + 1) * 6;
+      ctx.lineTo(x, borderY - 18 + wave);
+    }
+    ctx.lineTo(WORLD_W * TILE, borderY + 30);
+    ctx.lineTo(0, borderY + 30);
+    ctx.closePath();
+    ctx.fill();
+
+    // Lighter grass highlight on the wavy edge
+    ctx.fillStyle = '#3a7a30';
+    ctx.beginPath();
+    ctx.moveTo(0, borderY);
+    for (let x = 0; x <= steps; x += 8) {
+      const wave = Math.sin(x * 0.018) * 12 + Math.sin(x * 0.042 + 1) * 6;
+      ctx.lineTo(x, borderY - 16 + wave);
+    }
+    for (let x = steps; x >= 0; x -= 8) {
+      const wave = Math.sin(x * 0.018) * 12 + Math.sin(x * 0.042 + 1) * 6;
+      ctx.lineTo(x, borderY - 10 + wave);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Base dividers — vertical lines between the 7 bases
+    for (let i = 1; i < 7; i++) {
+      const bx = (2 + i * 8) * TILE;
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo(bx, (WORLD_H - 4) * TILE);
+      ctx.lineTo(bx, WORLD_H * TILE);
+      ctx.stroke();
+    }
+
+    // Base labels
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.font      = 'bold 14px "Segoe UI"';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    for (let i = 0; i < 7; i++) {
+      const bx = (2 + i * 8) * TILE + 6;
+      const by = (WORLD_H - 4) * TILE + 8;
+      ctx.fillText('base', bx, by);
+    }
+
+    return oc;
+  }
+
+  // Pre-render minimap static layer (paths + zones) — called once, huge perf gain
+  _buildMinimapCache() {
+    const mm  = this.minimap;
+    const oc  = document.createElement('canvas');
+    oc.width  = mm.width;
+    oc.height = mm.height;
+    const mc  = oc.getContext('2d');
+    const sw  = mm.width  / (WORLD_W * TILE);
+    const sh  = mm.height / (WORLD_H * TILE);
+    const FOREST_END = WORLD_H - LOBBY_H;
+
+    // Forest
+    mc.fillStyle = '#1a4a1a';
+    mc.fillRect(0, 0, mm.width, FOREST_END * TILE * sh);
+    // Lobby
+    mc.fillStyle = '#374151';
+    mc.fillRect(0, FOREST_END * TILE * sh, mm.width, mm.height);
+    // Border
+    mc.fillStyle = '#2d5a20';
+    mc.fillRect(0, (FOREST_END - 1) * TILE * sh, mm.width, 3);
+
+    // Paths
+    mc.fillStyle = '#c4a882';
+    for (let ty = 0; ty < WORLD_H; ty++)
+      for (let tx = 0; tx < WORLD_W; tx++)
+        if (this.tiles[ty][tx] === 1)
+          mc.fillRect(tx*TILE*sw, ty*TILE*sh, Math.max(1, TILE*sw), Math.max(1, TILE*sh));
 
     return oc;
   }
@@ -279,12 +342,16 @@ class Game {
     this._resize();
     window.addEventListener('resize', () => this._resize());
 
-    // Find active creature — fallback to Lucas da Vucas if collection empty
+    // Spawn in lobby (bottom of world)
+    const FOREST_END = WORLD_H - LOBBY_H;
+    this.player.x = WORLD_W / 2 * TILE;
+    this.player.y = (FOREST_END + 7) * TILE;
+
+    // Find active creature — deduplicated: take first is_active, or first in collection
     const active = collection.find(uc => uc.is_active) || collection[0];
     if (active && active.creature) {
       this.myCreature = { ...active.creature, currentHp: active.current_hp ?? active.creature.hp };
     } else {
-      // Local fallback starter so the game is still playable
       const lucas = creatures.find(c => c.id === 'c0');
       if (lucas) this.myCreature = { ...lucas, currentHp: lucas.hp };
     }
@@ -298,9 +365,11 @@ class Game {
     this.lastTime = performance.now();
     requestAnimationFrame(t => this._loop(t));
 
-    // Show tutorial for new users
-    if (isNewUser) {
-      setTimeout(() => this._showTutorial(), 600);
+    // Tutorial: show for new users OR users who only have the starter creature
+    const hasOnlyStarter = collection.length <= 1 &&
+      collection.every(uc => uc.creature_id === 'c0');
+    if (isNewUser || hasOnlyStarter) {
+      setTimeout(() => this._showTutorial(), 800);
     }
   }
 
@@ -342,7 +411,7 @@ class Game {
       { title: '👋 Welcome!',
         body:  `You are <b>${this.session.username}</b>!<br><br>Your starter creature is <b style="color:#4169E1">Lucas da Vucas</b>.<br>It's in your active slot, ready to battle.` },
       { title: '🕹️ Moving Around',
-        body:  'Use <b>WASD</b> or <b>Arrow Keys</b> to move.<br><br>The <b>Lobby</b> is at the top. Head <b>south</b> into the forest to find wild creatures.' },
+        body:  'Use <b>WASD</b> or <b>Arrow Keys</b> to move.<br><br>You start in the <b>Lobby</b> at the bottom. Walk <b>north (up)</b> to enter the forest and find wild creatures.' },
       { title: '⚔️ Battling Creatures',
         body:  'Walk up to a glowing creature in the forest.<br><br>Press <b>E</b> or click <b>Fight</b> to start a turn-based battle.<br><br>Your first battle is <b>guaranteed to win!</b>' },
       { title: '🎒 Catching & Pen',
@@ -376,16 +445,19 @@ class Game {
     this.worldCreatures = [];
     const rng = mulberry32(Date.now() & 0xFFFF);
     const spawnables = this.creatures.filter(c => c.spawn_rate > 0);
+    const FOREST_END = WORLD_H - LOBBY_H;
     const count = 80 + Math.floor(rng() * 40);
 
     for (let i = 0; i < count; i++) {
-      const ty = LOBBY_H + 2 + Math.floor(rng() * (WORLD_H - LOBBY_H - 4));
+      const ty = Math.floor(rng() * (FOREST_END - 2));
       const tx = Math.floor(rng() * WORLD_W);
       const t  = this.tiles[ty][tx];
-      if (t === 2 || t === 1 || t === 4) continue;
+      if (t === 2 || t === 1) continue; // skip trees and paths
 
-      const depth    = (ty - LOBBY_H) * TILE;
-      const zone     = [...DEPTH_ZONES].reverse().find(z => depth >= z.minDepth) || DEPTH_ZONES[0];
+      // Depth: deeper = further from lobby = smaller ty (higher up)
+      // depth 0 at FOREST_END-1 (just inside forest), max at ty=0
+      const depth = (FOREST_END - 1 - ty) * TILE;
+      const zone  = [...DEPTH_ZONES].reverse().find(z => depth >= z.minDepth) || DEPTH_ZONES[0];
       const eligible = spawnables.filter(c => zone.rarities.includes(c.rarity));
       if (!eligible.length) continue;
 
@@ -478,15 +550,15 @@ class Game {
     }
     document.getElementById('btn-fight').disabled = !this.nearbyCreature || !this.myCreature;
 
-    const depth = Math.max(0, Math.floor(((this.player.y / TILE) - LOBBY_H) * 5));
+    const FOREST_END = WORLD_H - LOBBY_H;
+    const depth = Math.max(0, Math.floor((FOREST_END - this.player.y / TILE) * 5));
     document.getElementById('hud-depth').textContent = `Depth: ${depth}m`;
   }
 
   _walkable(wx, wy) {
     const tx = Math.floor(wx / TILE), ty = Math.floor(wy / TILE);
     if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return false;
-    const t = this.tiles[ty][tx];
-    return t !== 2 && t !== 4;
+    return this.tiles[ty][tx] !== 2; // only trees block
   }
 
   // ── Draw ──────────────────────────────────────────────────
@@ -502,25 +574,29 @@ class Game {
       this.camera.x, this.camera.y,
       this.canvas.width, this.canvas.height);
 
-    // Animated water ripple over water tiles
-    const t4startY = LOBBY_H * TILE, t4endY = (LOBBY_H + 1) * TILE;
-    if (t4startY < this.camera.y + this.canvas.height && t4endY > this.camera.y) {
-      ctx.fillStyle = `rgba(100,200,255,${0.12 + Math.sin(ts * 0.003) * 0.06})`;
-      ctx.fillRect(0, t4startY, WORLD_W * TILE, TILE);
+    // Wavy border animated shimmer
+    const FEROW = (WORLD_H - LOBBY_H);
+    const bY = FEROW * TILE;
+    if (bY - 30 < this.camera.y + this.canvas.height && bY + 30 > this.camera.y) {
+      ctx.fillStyle = `rgba(60,140,40,${0.08 + Math.sin(ts * 0.002) * 0.04})`;
+      ctx.fillRect(0, bY - 28, WORLD_W * TILE, 56);
     }
 
-    // Zone depth overlay pulsing (subtle breathing effect in deep forest)
-    const playerDepth = Math.max(0, (this.player.y / TILE - LOBBY_H) / (WORLD_H - LOBBY_H));
+    // Zone depth overlay — forest gets darker the further north you go
+    const FOREST_END_ROW = WORLD_H - LOBBY_H;
+    const playerDepth = Math.max(0, 1 - (this.player.y / TILE) / FOREST_END_ROW);
     if (playerDepth > 0.3) {
       ctx.fillStyle = `rgba(0,0,20,${Math.sin(ts * 0.001) * 0.04 * playerDepth})`;
       ctx.fillRect(this.camera.x, this.camera.y, this.canvas.width, this.canvas.height);
     }
 
     // Structure signs
-    this._drawSign(ctx, 5 * TILE, 4 * TILE, '🏪', 'Store');
-    this._drawSign(ctx, (WORLD_W - 6) * TILE, 5 * TILE, '🌀', 'Portal');
-    this._drawSign(ctx, (WORLD_W - 6) * TILE, 11 * TILE, '⚔️', 'Training');
-    this._drawSign(ctx, Math.floor(WORLD_W/2) * TILE, (LOBBY_H - 2) * TILE, '🌲', 'Forest →');
+    const FE = WORLD_H - LOBBY_H;
+    this._drawSign(ctx, 5 * TILE,              (FE + 4) * TILE, '🏪', 'Store');
+    this._drawSign(ctx, (WORLD_W - 6) * TILE,  (FE + 5) * TILE, '🌀', 'Portal');
+    this._drawSign(ctx, (WORLD_W - 6) * TILE,  (FE + 11) * TILE, '⚔️', 'Training');
+    this._drawSign(ctx, Math.floor(WORLD_W/2) * TILE, (FE - 3) * TILE, '🌲', '← Forest');
+    this._drawSign(ctx, Math.floor(WORLD_W/2) * TILE, (FE + 2) * TILE, '👆', 'Go North');
 
     // Particles
     for (const p of this.particles) {
@@ -543,11 +619,11 @@ class Game {
 
       ctx.save();
 
-      // Glow halo for rare+
-      if (glow) {
+      // Glow halo — only on nearby creature (shadow blur is expensive)
+      if (glow && isNear) {
         const pulse = 0.5 + Math.sin(ts * 0.004 + wc.bobOffset) * 0.5;
         ctx.shadowColor = glow;
-        ctx.shadowBlur  = isNear ? 30 + pulse * 10 : 12 + pulse * 6;
+        ctx.shadowBlur  = 28 + pulse * 10;
       }
 
       this._drawCreatureSprite(ctx, cx, cy, wc.type.rarity, col, ts + wc.bobOffset * 1000);
@@ -775,28 +851,12 @@ class Game {
 
   _drawMinimap() {
     const mm = this.minimap, mc = this.mmCtx;
-    const sw = mm.width / (WORLD_W * TILE), sh = mm.height / (WORLD_H * TILE);
+    const sw = mm.width  / (WORLD_W * TILE), sh = mm.height / (WORLD_H * TILE);
 
-    // Background
-    mc.fillStyle = '#0a1628'; mc.fillRect(0, 0, mm.width, mm.height);
-    mc.fillStyle = '#4a9e52';
-    mc.fillRect(0, LOBBY_H*TILE*sh, mm.width, mm.height - LOBBY_H*TILE*sh);
-    mc.fillStyle = '#5a6475';
-    mc.fillRect(0, 0, mm.width, LOBBY_H*TILE*sh);
+    // Blit pre-rendered static layer (paths + zones)
+    mc.drawImage(this._minimapCache, 0, 0);
 
-    // Water line
-    mc.fillStyle = '#1e4fa3';
-    mc.fillRect(0, LOBBY_H*TILE*sh, mm.width, 2);
-
-    // Paths
-    mc.fillStyle = '#c4a882';
-    for (let ty = 0; ty < WORLD_H; ty++)
-      for (let tx = 0; tx < WORLD_W; tx++)
-        if (this.tiles[ty][tx] === 1) {
-          mc.fillRect(tx*TILE*sw, ty*TILE*sh, Math.max(1, TILE*sw), Math.max(1, TILE*sh));
-        }
-
-    // Creatures
+    // Dynamic: creatures
     for (const wc of this.worldCreatures) {
       if (wc.dead) continue;
       mc.fillStyle = RARITY_COLORS[wc.type.rarity];
@@ -808,7 +868,7 @@ class Game {
     for (const [, op] of this.otherPlayers)
       mc.fillRect(op.x*sw-2, op.y*sh-2, 4, 4);
 
-    // Player
+    // Player dot
     mc.fillStyle = '#6366f1';
     mc.shadowColor = '#6366f1'; mc.shadowBlur = 4;
     mc.fillRect(this.player.x*sw-3, this.player.y*sh-3, 6, 6);
@@ -843,20 +903,30 @@ class Game {
 
   // ── Pen / Store ───────────────────────────────────────────
   async _storePen() {
-    if (!this.myCreature) return;
+    if (!this.myCreature || this._storingPen) return;
+    this._storingPen = true;
+    document.getElementById('btn-store-pen').disabled = true;
+
+    const creatureToStore = this.myCreature;
     try {
       const res = await fetch('/api/creatures/catch', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: this.session.userId, creatureId: this.myCreature.id })
+        body: JSON.stringify({ userId: this.session.userId, creatureId: creatureToStore.id })
       });
-      if (!res.ok) throw new Error();
-      window.notify(`${this.myCreature.name} stored in your pen!`, 'success');
-      if (this.socket) this.socket.emit('creature_caught', { creatureId: this.myCreature.id });
-      this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[this.myCreature.rarity]);
-      // refresh pen count
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+
+      // Clear active creature — you've banked it
+      this.myCreature = null;
+      this._updateHUD();
+      window.notify(`${creatureToStore.name} stored in your pen!`, 'success');
+      this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[creatureToStore.rarity]);
+      if (this.socket) this.socket.emit('creature_caught', { creatureId: creatureToStore.id });
       window.refreshPenCount && window.refreshPenCount();
-    } catch {
-      window.notify('Failed to store creature. Check DB permissions.', 'error');
+    } catch (e) {
+      window.notify(`Failed to store: ${e.message}`, 'error');
+      document.getElementById('btn-store-pen').disabled = false;
+    } finally {
+      this._storingPen = false;
     }
   }
 
