@@ -244,6 +244,16 @@
 </head>
 <body>
 
+<!-- ── Error Screen ──────────────────────────────────────── -->
+<div id="error-screen" class="screen hidden">
+  <div style="text-align:center;max-width:440px;padding:40px;">
+    <div style="font-size:64px;margin-bottom:24px;">⚠️</div>
+    <h2 style="font-size:24px;font-weight:700;margin-bottom:12px;">Something went wrong</h2>
+    <p id="error-msg" style="color:var(--gray);font-size:15px;margin-bottom:32px;line-height:1.6;">An unexpected error occurred.</p>
+    <button id="btn-error-retry" class="btn-primary" style="width:auto;padding:12px 32px;">Back to Login</button>
+  </div>
+</div>
+
 <!-- ── Login ────────────────────────────────────────── -->
 <div id="login-screen" class="screen">
   <div class="login-container">
@@ -283,10 +293,10 @@
         <button id="btn-play" class="btn-primary" style="width:auto;padding:12px 36px">Quick Play</button>
       </div>
       <div class="dashboard-card">
-        <div class="card-icon">🐾</div>
-        <h3>My Pen</h3>
+        <div class="card-icon">🏠</div>
+        <h3>My Base</h3>
         <p>View your stored creatures <span id="pen-count-badge" class="pen-count-badge hidden">0</span></p>
-        <button id="btn-pen" class="btn-secondary">Open Pen</button>
+        <button id="btn-pen" class="btn-secondary">View Base</button>
       </div>
       <div class="dashboard-card">
         <div class="card-icon">🌐</div>
@@ -321,7 +331,7 @@
 <div id="pen-modal" class="modal-overlay hidden">
   <div class="modal-box">
     <div class="modal-header">
-      <h2>🐾 My Pen</h2>
+      <h2>🏠 My Base</h2>
       <button class="btn-close" id="btn-close-pen">✕</button>
     </div>
     <div class="collection-controls">
@@ -392,8 +402,7 @@
   </div>
   <div id="hud-bottom">
     <button class="hud-btn" id="btn-fight" disabled>⚔ Fight (E)</button>
-    <button class="hud-btn" id="btn-store-pen" disabled>📦 Store in Pen</button>
-    <button class="hud-btn pen-btn" id="btn-view-pen">🐾 Pen</button>
+    <button class="hud-btn" id="btn-store-pen" disabled title="Walk to your base to store">🏠 Store in Base</button>
     <button class="hud-btn" id="btn-menu">☰ Menu</button>
   </div>
   <div id="hud-chat" class="hud-panel" style="padding:0;overflow:hidden;">

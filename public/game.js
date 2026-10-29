@@ -320,7 +320,7 @@ class Game {
       if (this.tutorialStep >= 0) this._advanceTutorial();
       else this._tryFight();
     });
-    document.getElementById('btn-store-pen').addEventListener('click', () => this._storePen());
+    document.getElementById('btn-store-pen').addEventListener('click', () => this._storeInBase());
     document.getElementById('btn-menu').addEventListener('click', () => this.stop());
     document.getElementById('btn-view-pen').addEventListener('click', () => window.openPenModal());
   }
@@ -414,10 +414,10 @@ class Game {
         body:  'Use <b>WASD</b> or <b>Arrow Keys</b> to move.<br><br>You start in the <b>Lobby</b> at the bottom. Walk <b>north (up)</b> to enter the forest and find wild creatures.' },
       { title: '⚔️ Battling Creatures',
         body:  'Walk up to a glowing creature in the forest.<br><br>Press <b>E</b> or click <b>Fight</b> to start a turn-based battle.<br><br>Your first battle is <b>guaranteed to win!</b>' },
-      { title: '🎒 Catching & Pen',
-        body:  'After winning a battle, click <b>"Take Creature"</b> to hold it.<br><br>You can only hold <b>1 creature</b> at a time.<br><br>Click <b>"Store in Pen"</b> to save it to your permanent collection.' },
-      { title: '📦 Your Pen',
-        body:  'Your <b>Pen</b> stores all collected creatures permanently.<br><br>Click the <b>🐾 Pen</b> button in the HUD (or from the dashboard) to view them anytime.<br><br>Filter by rarity, search by name.' },
+      { title: '🎒 Catching & Base',
+        body:  'After winning a battle, click <b>"Take Creature"</b> to hold it.<br><br>You can only hold <b>1 creature</b> at a time.<br><br>Walk back to the <b>bottom of the lobby</b> to reach your base, then click <b>"Store in Base"</b>.' },
+      { title: '🏠 Your Base',
+        body:  'Your <b>base</b> is at the very bottom of the lobby — those are the 7 labelled sections.<br><br>Walk to the bottom row and the <b>"Store in Base"</b> button will activate.<br><br>View your stored creatures from the <b>dashboard</b>.' },
       { title: '🌲 Forest Depth',
         body:  'The deeper into the forest you go, the <b>rarer</b> the creatures.<br><br><span style="color:#808080">■ Common</span> → surface<br><span style="color:#10b981">■ Uncommon</span> → deeper<br><span style="color:#f59e0b">■ Legendary</span> → very deep<br><span style="color:#f472b6">■ Omniversal</span> → extreme depth' },
       { title: '✅ You\'re Ready!',
@@ -550,9 +550,19 @@ class Game {
     }
     document.getElementById('btn-fight').disabled = !this.nearbyCreature || !this.myCreature;
 
+    // Base proximity — player is near their base if in lobby zone near bottom
     const FOREST_END = WORLD_H - LOBBY_H;
+    const inLobby    = this.player.y / TILE > FOREST_END;
+    const nearBase   = inLobby && this.player.y / TILE > (WORLD_H - 6);
+    document.getElementById('btn-store-pen').disabled = !this.myCreature || !nearBase;
+    document.getElementById('btn-store-pen').title    = nearBase
+      ? 'Store creature in your base'
+      : 'Walk to your base (bottom of lobby) to store';
+
     const depth = Math.max(0, Math.floor((FOREST_END - this.player.y / TILE) * 5));
-    document.getElementById('hud-depth').textContent = `Depth: ${depth}m`;
+    document.getElementById('hud-depth').textContent = nearBase
+      ? '🏠 At your base'
+      : depth > 0 ? `Depth: ${depth}m` : 'Lobby';
   }
 
   _walkable(wx, wy) {
@@ -901,30 +911,34 @@ class Game {
       `${this.otherPlayers.size + 1} / 20 players`;
   }
 
-  // ── Pen / Store ───────────────────────────────────────────
-  async _storePen() {
+  // ── Store in base ─────────────────────────────────────────
+  async _storeInBase() {
     if (!this.myCreature || this._storingPen) return;
     this._storingPen = true;
     document.getElementById('btn-store-pen').disabled = true;
 
     const creatureToStore = this.myCreature;
     try {
-      const res = await fetch('/api/creatures/catch', {
+      const res = await fetch('/api/creatures/store', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: this.session.userId, creatureId: creatureToStore.id })
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed');
 
-      // Clear active creature — you've banked it
+      // Record the win
+      fetch('/api/battles/win', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: this.session.userId })
+      }).catch(() => {});
+
       this.myCreature = null;
       this._updateHUD();
-      window.notify(`${creatureToStore.name} stored in your pen!`, 'success');
+      window.notify(`${creatureToStore.name} stored in your base! 🏠`, 'success');
       this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[creatureToStore.rarity]);
-      if (this.socket) this.socket.emit('creature_caught', { creatureId: creatureToStore.id });
+      if (this.socket) this.socket.emit('creature_stored', { creatureId: creatureToStore.id });
       window.refreshPenCount && window.refreshPenCount();
     } catch (e) {
       window.notify(`Failed to store: ${e.message}`, 'error');
-      document.getElementById('btn-store-pen').disabled = false;
     } finally {
       this._storingPen = false;
     }
@@ -1041,7 +1055,7 @@ class Game {
       this.myCreature = { ...this._currentEnemy, currentHp: this._currentEnemy.currentHp };
       if (this._currentWC) this._currentWC.dead = true;
       this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[this.myCreature.rarity]);
-      window.notify(`Caught ${this.myCreature.name}!${prev ? ` Replaced ${prev}.` : ''}`, 'success');
+      window.notify(`Caught ${this.myCreature.name}!${prev ? ` Replaced ${prev}.` : ''} Walk to your base to store it!`, 'success');
       this._updateHUD();
       this._endBattle();
     };
@@ -1087,9 +1101,9 @@ class Game {
       const p = this.otherPlayers.get(userId); if (p) { p.x = x; p.y = y; }
     });
     socket.on('chat_message', ({ username, message }) => this._addChat(`${username}: ${message}`));
-    socket.on('creature_caught_broadcast', ({ username, creatureId }) => {
+    socket.on('creature_stored_broadcast', ({ username, creatureId }) => {
       const c = this.creatures.find(cr => cr.id === creatureId);
-      if (c) this._addChat(`🎉 ${username} caught ${c.name}!`);
+      if (c) this._addChat(`🏠 ${username} stored ${c.name} in their base!`);
     });
   }
 

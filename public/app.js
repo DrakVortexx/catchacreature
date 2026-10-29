@@ -1,29 +1,48 @@
 /* ── Catch a Creature — App Controller ──────────────────── */
 
-let session  = null;
-let socket   = null;
+let session     = null;
+let socket      = null;
 window.gameInst = null;
 
 // ── Notifications ─────────────────────────────────────────
 function notify(message, type = 'info') {
   const el = document.createElement('div');
-  el.className  = `notif ${type}`;
+  el.className   = `notif ${type}`;
   el.textContent = message;
   document.getElementById('notifications').appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }
 window.notify = notify;
 
+// ── Error screen ──────────────────────────────────────────
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  showScreen('error-screen');
+}
+window.showError = showError;
+
 // ── Screen helpers ────────────────────────────────────────
 function showScreen(id) {
-  ['login-screen','dashboard','game-screen','battle-screen'].forEach(s => {
-    document.getElementById(s)?.classList.add('hidden');
-  });
+  ['login-screen','dashboard','game-screen','battle-screen','error-screen']
+    .forEach(s => document.getElementById(s)?.classList.add('hidden'));
   document.getElementById('hud').classList.add('hidden');
   document.getElementById(id)?.classList.remove('hidden');
 }
-function showModal(id) { document.getElementById(id).classList.remove('hidden'); }
-function hideModal(id) { document.getElementById(id).classList.add('hidden'); }
+function showModal(id)  { document.getElementById(id).classList.remove('hidden'); }
+function hideModal(id)  { document.getElementById(id).classList.add('hidden'); }
+
+// ── Single-tab enforcement via localStorage ───────────────
+const TAB_KEY = 'cac_active_tab';
+const TAB_ID  = Math.random().toString(36).slice(2);
+localStorage.setItem(TAB_KEY, TAB_ID);
+
+window.addEventListener('storage', e => {
+  if (e.key === TAB_KEY && e.newValue !== TAB_ID && session) {
+    // Another tab claimed the session
+    socket?.disconnect();
+    showError('This account was opened in another tab. Close this tab and use the other one.');
+  }
+});
 
 // ── Login ─────────────────────────────────────────────────
 const loginForm  = document.getElementById('login-form');
@@ -47,13 +66,18 @@ loginForm.addEventListener('submit', async e => {
     if (!res.ok) { loginError.textContent = data.error || 'Login failed.'; return; }
 
     session = { userId: data.userId, username: data.username };
-    sessionStorage.setItem('cacSession', JSON.stringify(session));
+    localStorage.setItem('cacSession', JSON.stringify(session));
+    localStorage.setItem(TAB_KEY, TAB_ID); // claim tab
+
     const isNew = data.isNewUser;
+    session.isNewUser = isNew;
     notify(isNew ? '🎉 Account created! Welcome!' : `Welcome back, ${data.username}!`, 'success');
-    session.isNewUser = isNew; // keep in memory only, not persisted
     openDashboard();
-  } catch { loginError.textContent = 'Server error. Try again.'; }
-  finally { loginBtn.disabled = false; loginBtn.textContent = 'Enter World'; }
+  } catch {
+    loginError.textContent = 'Server error. Try again.';
+  } finally {
+    loginBtn.disabled = false; loginBtn.textContent = 'Enter World';
+  }
 });
 
 // ── Dashboard ─────────────────────────────────────────────
@@ -63,23 +87,22 @@ async function openDashboard() {
   document.getElementById('dash-stats').textContent    = 'Loading…';
   try {
     const res  = await fetch(`/api/users/${session.userId}/stats`);
+    if (!res.ok) throw new Error();
     const data = await res.json();
-    if (res.ok)
-      document.getElementById('dash-stats').textContent =
-        `${data.totalCaught} in Pen · ${data.battlesWon} Battles Won`;
-    // Update pen badge
-    refreshPenCount();
+    document.getElementById('dash-stats').textContent =
+      `${data.totalCaught} stored · ${data.battlesWon} wins`;
+    refreshBaseCount();
   } catch {
     document.getElementById('dash-stats').textContent = 'Could not load stats.';
   }
 }
 window.openDashboard = openDashboard;
 
-async function refreshPenCount() {
+async function refreshBaseCount() {
   if (!session) return;
   try {
-    const res   = await fetch(`/api/users/${session.userId}/stats`);
-    const data  = await res.json();
+    const res  = await fetch(`/api/users/${session.userId}/stats`);
+    const data = await res.json();
     const badge = document.getElementById('pen-count-badge');
     if (data.totalCaught > 0) {
       badge.textContent = data.totalCaught;
@@ -89,12 +112,12 @@ async function refreshPenCount() {
     }
   } catch { /* ignore */ }
 }
-window.refreshPenCount = refreshPenCount;
+window.refreshPenCount = refreshBaseCount; // game.js calls this name
 
 document.getElementById('btn-logout').addEventListener('click', () => {
   session = null;
-  sessionStorage.removeItem('cacSession');
-  if (socket) { socket.disconnect(); socket = null; }
+  localStorage.removeItem('cacSession');
+  socket?.disconnect(); socket = null;
   window.gameInst = null;
   showScreen('login-screen');
   notify('Logged out.', 'info');
@@ -123,18 +146,27 @@ async function startGame(lobbyId, lobbyName) {
   ]);
   const creatures  = await crRes.json();
   const collection = colRes.ok ? await colRes.json() : [];
-
-  // If collection failed (DB permissions), warn but continue with local starter
-  if (!colRes.ok) notify('⚠️ Could not load collection — check DB permissions.', 'error');
+  if (!colRes.ok) notify('⚠️ Could not load creatures — check DB permissions.', 'error');
 
   window.gameInst = new Game();
   showScreen('game-screen');
   document.getElementById('hud').classList.remove('hidden');
 
-  if (!socket) socket = io();
+  if (!socket || !socket.connected) socket = io();
+
+  // Register session for single-session enforcement server-side
+  socket.emit('register_session', { userId: session.userId, username: session.username });
+
+  // Handle being kicked (same account opened elsewhere)
+  socket.off('kicked');
+  socket.on('kicked', (reason) => {
+    window.gameInst?.stop?.();
+    socket.disconnect();
+    showError(reason || 'You were disconnected because your account was opened elsewhere.');
+  });
+
   window.gameInst.connectSocket(socket);
   socket.emit('join_lobby', { lobbyId, userId: session.userId, username: session.username });
-
   window.gameInst.start(session, lobbyId, lobbyName, creatures, collection, session.isNewUser);
   notify(`Joined ${lobbyName}!`, 'success');
 }
@@ -168,36 +200,36 @@ async function loadLobbies() {
   } catch { list.innerHTML = '<p style="color:var(--danger)">Failed to load.</p>'; }
 }
 
-// ── Pen (collection) ──────────────────────────────────────
-function openPenModal() { showModal('pen-modal'); loadPen(); }
-window.openPenModal = openPenModal;
+// ── Base viewer (dashboard) ───────────────────────────────
+function openBaseModal() { showModal('pen-modal'); loadBase(); }
+window.openPenModal = openBaseModal;
 
-document.getElementById('btn-pen').addEventListener('click', openPenModal);
+document.getElementById('btn-pen').addEventListener('click', openBaseModal);
 document.getElementById('btn-close-pen').addEventListener('click', () => hideModal('pen-modal'));
-document.getElementById('rarity-filter').addEventListener('change', () => renderPen());
-document.getElementById('search-creatures').addEventListener('input',  () => renderPen());
+document.getElementById('rarity-filter').addEventListener('change', () => renderBase());
+document.getElementById('search-creatures').addEventListener('input',  () => renderBase());
 
-let _penCreatures = [];
+let _baseCreatures = [];
 
-async function loadPen() {
+async function loadBase() {
   const grid = document.getElementById('creature-grid');
   grid.innerHTML = '<p style="color:var(--gray);padding:20px;">Loading…</p>';
   try {
     const res = await fetch(`/api/users/${session.userId}/creatures`);
     if (!res.ok) throw new Error();
-    _penCreatures = await res.json();
-    renderPen();
+    _baseCreatures = await res.json();
+    renderBase();
   } catch {
-    grid.innerHTML = '<p style="color:var(--danger);padding:20px;">Failed to load pen. Check DB permissions.</p>';
+    grid.innerHTML = '<p style="color:var(--danger);padding:20px;">Failed to load. Check DB permissions.</p>';
   }
 }
 
-function renderPen() {
+function renderBase() {
   const grid   = document.getElementById('creature-grid');
   const rarity = document.getElementById('rarity-filter').value;
   const search = document.getElementById('search-creatures').value.toLowerCase();
 
-  const filtered = _penCreatures.filter(uc => {
+  const filtered = _baseCreatures.filter(uc => {
     if (!uc.creature) return false;
     if (rarity !== 'all' && uc.creature.rarity !== rarity) return false;
     if (search && !uc.creature.name.toLowerCase().includes(search)) return false;
@@ -205,11 +237,11 @@ function renderPen() {
   });
 
   if (!filtered.length) {
-    grid.innerHTML = `<p style="color:var(--gray);padding:20px 0;">
-      ${_penCreatures.length === 0
-        ? '🐾 Your pen is empty. Go battle creatures and press "Store in Pen"!'
-        : 'No creatures match your filter.'}
-    </p>`;
+    grid.innerHTML = `<p style="color:var(--gray);padding:20px 0;">${
+      _baseCreatures.length === 0
+        ? '🏠 Your base is empty. Go catch creatures and walk to your base to store them!'
+        : 'No creatures match your filter.'
+    }</p>`;
     return;
   }
 
@@ -224,9 +256,7 @@ function renderPen() {
       <p>ATK ${c.attack} · DEF ${c.defense} · SPD ${c.speed}</p>
       <p>HP ${c.hp}</p>
       <p style="margin-top:6px;color:var(--accent);font-size:12px;">✨ ${c.special_ability}</p>
-      <p style="font-size:11px;margin-top:8px;color:var(--gray)">
-        Stored ${new Date(uc.caught_at).toLocaleDateString()}
-      </p>`;
+      <p style="font-size:11px;margin-top:8px;color:var(--gray)">Stored ${new Date(uc.caught_at).toLocaleDateString()}</p>`;
     grid.appendChild(card);
   }
 }
@@ -242,9 +272,7 @@ document.getElementById('btn-settings').addEventListener('click', () => showModa
 document.getElementById('btn-close-settings').addEventListener('click', () => hideModal('settings-modal'));
 
 // ── Tutorial wiring ───────────────────────────────────────
-document.getElementById('tut-next').addEventListener('click', () => {
-  window.gameInst?._advanceTutorial();
-});
+document.getElementById('tut-next').addEventListener('click', () => window.gameInst?._advanceTutorial());
 document.getElementById('tut-skip').addEventListener('click', () => {
   if (window.gameInst) {
     window.gameInst.tutorialStep = -1;
@@ -252,13 +280,22 @@ document.getElementById('tut-skip').addEventListener('click', () => {
   }
 });
 
-// ── Session restore ───────────────────────────────────────
+// ── Error screen retry ────────────────────────────────────
+document.getElementById('btn-error-retry')?.addEventListener('click', () => {
+  showScreen('login-screen');
+});
+
+// ── Session restore from localStorage ────────────────────
 (function restore() {
-  const saved = sessionStorage.getItem('cacSession');
+  const saved = localStorage.getItem('cacSession');
   if (saved) {
     try {
       const p = JSON.parse(saved);
-      if (p.userId && p.username) { session = p; openDashboard(); return; }
+      if (p.userId && p.username) {
+        session = p;
+        openDashboard();
+        return;
+      }
     } catch { /**/ }
   }
   showScreen('login-screen');
