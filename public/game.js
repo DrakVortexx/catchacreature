@@ -86,6 +86,9 @@ class Game {
     this.tutorialStep   = -1; // -1 = not shown, 0..N = active
     this.tutorialDone   = false;
 
+    // dropped creatures on ground
+    this.droppedCreatures = [];
+
     const rng = mulberry32(42);
     this.tiles = this._generateWorld(rng);
     this._offscreen    = this._buildOffscreen();
@@ -583,10 +586,9 @@ class Game {
     this.lastTime = performance.now();
     requestAnimationFrame(t => this._loop(t));
 
-    // Tutorial: show for new users OR users who only have the starter creature
-    const hasOnlyStarter = collection.length <= 1 &&
-      collection.every(uc => uc.creature_id === 'c0');
-    if (isNewUser || hasOnlyStarter) {
+    // Tutorial: show only if not completed before
+    const tutorialCompleted = localStorage.getItem('cac_tutorial_completed');
+    if (!tutorialCompleted && isNewUser) {
       setTimeout(() => this._showTutorial(), 800);
     }
   }
@@ -620,6 +622,7 @@ class Game {
     if (this.tutorialStep >= steps.length) {
       this.tutorialStep  = -1;
       this.tutorialDone  = true;
+      localStorage.setItem('cac_tutorial_completed', 'true');
       const tutorialOverlay = document.getElementById('tutorial-overlay');
       if (tutorialOverlay) tutorialOverlay.classList.add('hidden');
     } else {
@@ -971,6 +974,9 @@ class Game {
     // Draw creatures in base pen
     this._drawBaseCreatures(ctx, ts);
 
+    // Draw dropped creatures on ground
+    this._drawDroppedCreatures(ctx, ts);
+
     // "Press E" prompt
     if (this.nearbyCreature) {
       const px = this.player.x, py = this.player.y;
@@ -1158,16 +1164,17 @@ class Game {
     penCreatures.forEach((uc, i) => {
       const c = uc.creature;
       // Position creatures in a grid within the pen
-      const col = i % 3;
+      const gridCol = i % 3;
       const row = Math.floor(i / 3);
-      const cx = baseX + TILE + col * TILE * 1.5;
+      const cx = baseX + TILE + gridCol * TILE * 1.5;
       const cy = baseY + TILE + row * TILE * 1.5;
 
       // Bob animation
       const bob = Math.sin(ts * 0.003 + i) * 3;
 
       // Draw creature sprite
-      this._drawCreatureSprite(ctx, cx, cy + bob, c.rarity, c.color, ts);
+      const col = RARITY_COLORS[c.rarity] || '#fff';
+      this._drawCreatureSprite(ctx, cx, cy + bob, c.rarity, col, ts);
 
       // Draw creature name below
       ctx.fillStyle = '#fff';
@@ -1177,6 +1184,41 @@ class Game {
       ctx.fillText(c.name.substring(0, 8), cx, cy + 20);
     });
     ctx.restore();
+  }
+
+  _drawDroppedCreatures(ctx, ts) {
+    if (!this.droppedCreatures || this.droppedCreatures.length === 0) return;
+
+    this.droppedCreatures.forEach((dc, i) => {
+      const c = dc.creature;
+      const bob = Math.sin(ts * 0.003 + i) * 3;
+      const col = RARITY_COLORS[c.rarity] || '#fff';
+
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+
+      // Draw creature sprite
+      this._drawCreatureSprite(ctx, dc.x, dc.y + bob, c.rarity, col, ts);
+
+      // Glow effect
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 10;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(dc.x, dc.y + bob, 20, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Name tag
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 10px "Segoe UI"';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(c.name.substring(0, 10), dc.x, dc.y + bob + 25);
+
+      ctx.restore();
+    });
   }
 
   _drawMinimap() {
@@ -1437,6 +1479,21 @@ class Game {
 
   _doRun() { this._endBattle(); window.notify('Got away safely!', 'info'); }
 
+  _dropCreatureOnGround(creature) {
+    // Spawn a dropped creature item at player's position
+    this.droppedCreatures = this.droppedCreatures || [];
+    this.droppedCreatures.push({
+      creature: creature,
+      x: this.player.x,
+      y: this.player.y,
+      spawnedAt: Date.now()
+    });
+    // Remove after 5 minutes
+    setTimeout(() => {
+      this.droppedCreatures = this.droppedCreatures.filter(dc => dc !== this.droppedCreatures[this.droppedCreatures.length - 1]);
+    }, 300000);
+  }
+
   _winBattle() {
     this._battleOver = true;
     const btnAttack = document.getElementById('btn-attack');
@@ -1446,10 +1503,14 @@ class Game {
       btnRun.textContent = '✅ Take Creature';
       btnRun.onclick = () => {
         const prev = this.myCreature?.name;
+        // Drop previous creature on the ground if exists
+        if (this.myCreature) {
+          this._dropCreatureOnGround(this.myCreature);
+        }
         this.myCreature = { ...this._currentEnemy, currentHp: this._currentEnemy.currentHp };
         if (this._currentWC) this._currentWC.dead = true;
         this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[this.myCreature.rarity]);
-        window.notify(`Caught ${this.myCreature.name}!${prev ? ` Replaced ${prev}.` : ''} Walk to your base to store it!`, 'success');
+        window.notify(`Caught ${this.myCreature.name}!${prev ? ` Dropped ${prev} on the ground.` : ''} Walk to your base to store it!`, 'success');
         this._updateHUD();
         this._endBattle();
       };
