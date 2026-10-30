@@ -104,7 +104,7 @@ loginForm.addEventListener('submit', async e => {
     const data = await res.json();
     if (!res.ok) { loginError.textContent = data.error || 'Login failed.'; return; }
 
-    session = { userId: data.userId, username: data.username };
+    session = { userId: data.userId, username: data.username, money: data.money || 0 };
     localStorage.setItem('cacSession', JSON.stringify(session));
     localStorage.setItem(TAB_KEY, TAB_ID); // claim tab
 

@@ -77,6 +77,7 @@ class Game {
     this.activeSlot     = 0; // 0-indexed
     this.money          = 0;
     this.moneyTimer     = 0;
+    this.lastMoneySave  = 0; // Track when money was last saved to server
 
     // freeze mechanic
     this.frozenPlayers  = new Map(); // userId -> freezeEndTime
@@ -473,7 +474,7 @@ class Game {
       this.myCreature = null;
       this._updateHUD();
       this._updateNewHUD();
-      window.notify(`${creatureToDeposit.name} deposited to base!`, 'success');
+      window.notify(`${creatureToDeposit.name} stored in your base! 🏠`, 'success');
       this._spawnParticles(this.player.x, this.player.y, RARITY_COLORS[creatureToDeposit.rarity]);
       if (this.socket) this.socket.emit('creature_stored', { creatureId: creatureToDeposit.id });
       window.refreshPenCount && window.refreshPenCount();
@@ -572,6 +573,11 @@ class Game {
     } else {
       const lucas = creatures.find(c => c.id === 'c0');
       if (lucas) this.myCreature = { ...lucas, currentHp: lucas.hp };
+    }
+
+    // Load money from session if available
+    if (session.money) {
+      this.money = session.money;
     }
 
     this._spawnWorldCreatures();
@@ -807,6 +813,17 @@ class Game {
       }
     }
 
+    // Save money to server every 10 seconds
+    this.lastMoneySave = (this.lastMoneySave || 0) + dt;
+    if (this.lastMoneySave >= 10 && this.money > 0 && this.session) {
+      this.lastMoneySave = 0;
+      fetch(`/api/users/${this.session.userId}/money`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ money: this.money })
+      }).catch(e => console.log('Money save failed:', e));
+    }
+
     // Nearest creature detection
     this.nearbyCreature = null;
     let minD = 72;
@@ -826,8 +843,8 @@ class Game {
     if (btnStorePen) {
       btnStorePen.disabled = !this.myCreature || !nearBase;
       btnStorePen.title    = nearBase
-        ? 'Store creature in your base (or press E)'
-        : 'Walk to your base (bottom of lobby) to store';
+        ? 'Open your base (or press E)'
+        : 'Walk to your base (bottom of lobby) to open';
     }
 
     const depth = Math.max(0, Math.floor((FOREST_END - this.player.y / TILE) * 5));
@@ -903,43 +920,80 @@ class Game {
 
       ctx.save();
 
-      // Glow halo — only on nearby creature (shadow blur is expensive)
+      // Nearby creature: Enhanced glow + particles
       if (glow && isNear) {
-        const pulse = 0.5 + Math.sin(ts * 0.004 + wc.bobOffset) * 0.5;
+        const pulse = 0.6 + Math.sin(ts * 0.005 + wc.bobOffset) * 0.4;
+        
+        // Large pulsing glow
         ctx.shadowColor = glow;
-        ctx.shadowBlur  = 28 + pulse * 10;
+        ctx.shadowBlur  = 32 * pulse;
+        
+        // Multiple glow rings
+        ctx.strokeStyle = glow;
+        ctx.globalAlpha = 0.3;
+        ctx.lineWidth = 2;
+        for (let i = 1; i <= 3; i++) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, 25 + i * 6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      } else if (glow) {
+        // Subtle glow for non-near creatures
+        ctx.shadowColor = glow;
+        ctx.shadowBlur  = 12;
       }
 
       this._drawCreatureSprite(ctx, cx, cy, wc.type.rarity, col, ts + wc.bobOffset * 1000);
       ctx.shadowBlur = 0;
 
-      // Name tag
+      // Name tag with rarity and money info
+      const rarityRates = {
+        'common': 1, 'uncommon': 2, 'rare': 5, 'epic': 10, 'legendary': 25,
+        'mythic': 50, 'divine': 100, 'celestial': 200, 'eternal': 500, 'omniversal': 1000
+      };
+      const poe = rarityRates[wc.type.rarity] || 1;
+      
       ctx.font = 'bold 11px "Segoe UI"';
-      const tw = ctx.measureText(wc.type.name).width;
-      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      const nameWidth = ctx.measureText(wc.type.name).width;
+      ctx.font = '9px "Segoe UI"';
+      const rarityText = `${wc.type.rarity} · $${poe}/s`;
+      const rarityWidth = ctx.measureText(rarityText).width;
+      const maxWidth = Math.max(nameWidth, rarityWidth) + 12;
+      
+      ctx.fillStyle = 'rgba(0,0,0,0.8)';
       ctx.beginPath();
-      ctx.roundRect(cx - tw/2 - 6, cy - 38, tw + 12, 17, 4);
+      ctx.roundRect(cx - maxWidth/2, cy - 48, maxWidth, 26, 4);
       ctx.fill();
+      
+      // Name tag border
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(cx - maxWidth/2, cy - 48, maxWidth, 26, 4);
+      ctx.stroke();
+      
       ctx.fillStyle = '#fff';
       ctx.textAlign  = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(wc.type.name, cx, cy - 36);
-
-      // Rarity dot
+      ctx.font = 'bold 11px "Segoe UI"';
+      ctx.fillText(wc.type.name, cx, cy - 46);
+      
       ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(cx + tw/2 + 1, cy - 30, 3, 0, Math.PI*2);
-      ctx.fill();
+      ctx.font = '9px "Segoe UI"';
+      ctx.fillText(rarityText, cx, cy - 34);
 
-      // Selection ring
+      // Selection ring with animation
       if (isNear) {
         ctx.strokeStyle = '#fff';
-        ctx.lineWidth   = 2;
-        ctx.setLineDash([5, 4]);
-        ctx.lineDashOffset = -ts * 0.03;
+        ctx.lineWidth   = 3;
+        ctx.setLineDash([8, 5]);
+        ctx.lineDashOffset = -ts * 0.04;
+        ctx.globalAlpha = 0.8;
         ctx.beginPath();
-        ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+        ctx.arc(cx, cy, 24, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = 1;
         ctx.setLineDash([]);
       }
 
@@ -950,22 +1004,50 @@ class Game {
     for (const [, op] of this.otherPlayers) {
       ctx.save();
       ctx.shadowColor = '#f59e0b';
-      ctx.shadowBlur  = 10;
-      ctx.fillStyle   = '#f59e0b';
+      ctx.shadowBlur  = 12;
+      
+      // Body
+      const otherGrad = ctx.createLinearGradient(op.x-13, op.y-10, op.x+13, op.y+12);
+      otherGrad.addColorStop(0, '#fcd34d');
+      otherGrad.addColorStop(1, '#f59e0b');
+      ctx.fillStyle = otherGrad;
       ctx.beginPath();
-      ctx.roundRect(op.x - 13, op.y - 13, 26, 26, 6);
+      ctx.roundRect(op.x-13, op.y-10, 26, 22, 5);
       ctx.fill();
-      ctx.shadowBlur = 0;
-      // hat
+      
+      // Head
+      ctx.fillStyle = '#fef3c7';
+      ctx.beginPath();
+      ctx.arc(op.x, op.y-16, 9, 0, Math.PI*2);
+      ctx.fill();
+      
+      // Hat
       ctx.fillStyle = '#d97706';
-      ctx.fillRect(op.x - 10, op.y - 17, 20, 5);
-      ctx.fillRect(op.x - 7, op.y - 22, 14, 6);
+      ctx.fillRect(op.x-10, op.y-24, 20, 4);
+      ctx.fillRect(op.x-7, op.y-30, 14, 6);
+      
+      // Hat shine
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillRect(op.x-7, op.y-30, 14, 2);
+      
+      // Eyes
+      ctx.fillStyle = '#111';
+      ctx.beginPath(); ctx.arc(op.x-3, op.y-17, 1.5, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(op.x+3, op.y-17, 1.5, 0, Math.PI*2); ctx.fill();
+      
       ctx.restore();
+      
+      // Name label
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.beginPath();
+      ctx.roundRect(op.x-30, op.y-28, 60, 14, 4);
+      ctx.fill();
+      
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 10px "Segoe UI"';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText(op.username.substring(0, 10), op.x, op.y - 20);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(op.username.substring(0, 10).toUpperCase(), op.x, op.y - 21);
     }
 
     // Player character
@@ -977,18 +1059,39 @@ class Game {
     // Draw dropped creatures on ground
     this._drawDroppedCreatures(ctx, ts);
 
-    // "Press E" prompt
+    // "Press E" prompt with animation
     if (this.nearbyCreature) {
       const px = this.player.x, py = this.player.y;
-      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      const pulse = 0.7 + Math.sin(ts * 0.006) * 0.3;
+      
+      // Pulsing glow background
+      ctx.fillStyle = `rgba(253, 230, 138, ${pulse * 0.3})`;
+      ctx.shadowColor = '#fde68a';
+      ctx.shadowBlur = 15 * pulse;
       ctx.beginPath();
-      ctx.roundRect(px - 56, py - 58, 112, 22, 6);
+      ctx.roundRect(px - 60, py - 65, 120, 30, 8);
       ctx.fill();
-      ctx.fillStyle   = '#fde68a';
-      ctx.font        = 'bold 13px "Segoe UI"';
-      ctx.textAlign   = 'center';
+      
+      // Border
+      ctx.strokeStyle = '#fde68a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(px - 60, py - 65, 120, 30, 8);
+      ctx.stroke();
+      
+      // Icon
+      ctx.font = '18px Arial';
+      ctx.fillStyle = '#fbbf24';
+      ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('⚔ Press E to Fight!', px, py - 47);
+      ctx.fillText('⚔', px - 30, py - 50);
+      
+      // Text
+      ctx.font = 'bold 13px "Segoe UI"';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('Press E to Fight!', px + 15, py - 50);
+      
+      ctx.shadowBlur = 0;
     }
 
     ctx.restore();
@@ -997,77 +1100,339 @@ class Game {
   }
 
   _drawCreatureSprite(ctx, cx, cy, rarity, col, ts) {
-    ctx.fillStyle = col;
-    // Each rarity gets a distinct silhouette
+    ctx.save();
+    
+    // Add pulse glow based on rarity
+    const pulse = 0.3 + Math.sin(ts * 0.003) * 0.2;
+    const shadowBlur = (rarity === 'omniversal' ? 20 : rarity === 'eternal' ? 16 : rarity === 'celestial' ? 14 : 8) * pulse;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = shadowBlur;
+    
+    // Each rarity gets a distinct, more detailed sprite
     switch (rarity) {
-      case 'common': // chunky square
+      case 'common': { // Cute blocky critter
+        // Body with shading
+        ctx.fillStyle = col;
         ctx.beginPath();
-        ctx.roundRect(cx-13, cy-13, 26, 26, 4);
+        ctx.roundRect(cx-13, cy-13, 26, 26, 5);
+        ctx.fill();
+        
+        // Darker shade on bottom
+        ctx.fillStyle = this._darkenColor(col, 0.3);
+        ctx.beginPath();
+        ctx.roundRect(cx-13, cy+8, 26, 5, 2);
+        ctx.fill();
+        
+        // Highlight on top
+        ctx.fillStyle = this._lightenColor(col, 0.3);
+        ctx.beginPath();
+        ctx.roundRect(cx-13, cy-13, 26, 4, 2);
         ctx.fill();
         break;
-      case 'uncommon': // rounded
+      }
+      case 'uncommon': { // Smooth sphere with shine
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 13, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Shading gradient
+        const g1 = ctx.createRadialGradient(cx-3, cy-5, 0, cx, cy, 13);
+        g1.addColorStop(0, this._lightenColor(col, 0.4));
+        g1.addColorStop(1, this._darkenColor(col, 0.4));
+        ctx.fillStyle = g1;
         ctx.beginPath();
         ctx.arc(cx, cy, 13, 0, Math.PI*2);
         ctx.fill();
         break;
-      case 'rare': // diamond
-        ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.PI/4);
-        ctx.beginPath(); ctx.roundRect(-10,-10,20,20,3); ctx.fill();
+      }
+      case 'rare': { // Diamond with facets
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(Math.sin(ts * 0.002) * 0.3);
+        
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(0, -15);
+        ctx.lineTo(15, 0);
+        ctx.lineTo(0, 15);
+        ctx.lineTo(-15, 0);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Facet lines
+        ctx.strokeStyle = this._lightenColor(col, 0.4);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -15);
+        ctx.lineTo(0, 15);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-15, 0);
+        ctx.lineTo(15, 0);
+        ctx.stroke();
+        
         ctx.restore();
         break;
-      case 'epic': // star-ish pentagon
-        this._drawStar(ctx, cx, cy, 5, 14, 7);
-        break;
-      case 'legendary': // flame-like
+      }
+      case 'epic': { // Multi-pointed star with rotation
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(ts * 0.005);
+        
+        ctx.fillStyle = col;
+        this._drawStar(ctx, 0, 0, 5, 15, 8);
+        
+        // Inner bright core
+        ctx.fillStyle = this._lightenColor(col, 0.5);
         ctx.beginPath();
-        ctx.moveTo(cx, cy-16); ctx.quadraticCurveTo(cx+16, cy-6, cx+10, cy+12);
-        ctx.quadraticCurveTo(cx, cy+6, cx-10, cy+12);
-        ctx.quadraticCurveTo(cx-16, cy-6, cx, cy-16);
+        ctx.arc(0, 0, 5, 0, Math.PI*2);
+        ctx.fill();
+        
+        ctx.restore();
+        break;
+      }
+      case 'legendary': { // Flame creature
+        // Base body
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy-18);
+        ctx.quadraticCurveTo(cx+18, cy-2, cx+12, cy+14);
+        ctx.quadraticCurveTo(cx, cy+8, cx-12, cy+14);
+        ctx.quadraticCurveTo(cx-18, cy-2, cx, cy-18);
+        ctx.fill();
+        
+        // Flame highlights
+        ctx.fillStyle = this._lightenColor(col, 0.5);
+        ctx.beginPath();
+        ctx.moveTo(cx-5, cy-10);
+        ctx.quadraticCurveTo(cx-8, cy, cx-5, cy+8);
+        ctx.quadraticCurveTo(cx-2, cy+2, cx-5, cy-10);
+        ctx.fill();
+        
+        // Inner flame
+        ctx.fillStyle = '#ffff00';
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy-5, 6, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'mythic': { // Ghostly ethereal form
+        // Outer aura
+        ctx.fillStyle = this._lightenColor(col, 0.5);
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 16, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        
+        // Body
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 13, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Spooky void on side
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(cx+6, cy-3, 10, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Highlight
+        ctx.fillStyle = this._lightenColor(col, 0.6);
+        ctx.beginPath();
+        ctx.arc(cx-7, cy-8, 4, 0, Math.PI*2);
         ctx.fill();
         break;
-      case 'mythic': // crescent / ghost
-        ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#1a1a2e';
-        ctx.beginPath(); ctx.arc(cx+5, cy-3, 11, 0, Math.PI*2); ctx.fill();
+      }
+      case 'divine': { // Holy 8-pointed radiance
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(ts * 0.003);
+        
+        // Glow halo
+        ctx.fillStyle = this._lightenColor(col, 0.6);
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        
+        // Main body
         ctx.fillStyle = col;
+        this._drawStar(ctx, 0, 0, 8, 16, 9);
+        
+        // Bright core
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI*2);
+        ctx.fill();
+        
+        ctx.restore();
         break;
-      case 'divine': // eight-pointed star
-        this._drawStar(ctx, cx, cy, 8, 15, 7);
-        break;
-      case 'celestial': // ring + core
-        ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2); ctx.fill();
+      }
+      case 'celestial': { // Cosmic body with ring
+        // Outer ring (orbit)
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 16, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        
+        // Middle sphere
         ctx.fillStyle = col;
-        ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx, cy, 11, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Gradient effect
+        const gCelest = ctx.createRadialGradient(cx-2, cy-2, 0, cx, cy, 11);
+        gCelest.addColorStop(0, this._lightenColor(col, 0.3));
+        gCelest.addColorStop(1, this._darkenColor(col, 0.3));
+        ctx.fillStyle = gCelest;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 11, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Core
+        ctx.fillStyle = this._lightenColor(col, 0.7);
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI*2);
+        ctx.fill();
         break;
-      case 'eternal': // cross / X
-        this._drawStar(ctx, cx, cy, 4, 16, 5);
+      }
+      case 'eternal': { // Dark powerful force
+        // Outer dark aura
+        ctx.fillStyle = this._darkenColor(col, 0.4);
+        ctx.beginPath();
+        ctx.arc(cx, cy, 17, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Main body
+        ctx.fillStyle = col;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(ts * 0.004);
+        this._drawStar(ctx, 0, 0, 4, 16, 6);
+        ctx.restore();
+        
+        // Energy lines
+        ctx.strokeStyle = this._lightenColor(col, 0.6);
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+          const angle = (i * Math.PI / 2) + (ts * 0.003);
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(cx + Math.cos(angle) * 14, cy + Math.sin(angle) * 14);
+          ctx.stroke();
+        }
         break;
-      case 'omniversal': { // rainbow swirl
-        const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, 16);
-        const hue = (ts * 0.05) % 360;
-        gr.addColorStop(0,   `hsl(${hue},100%,80%)`);
-        gr.addColorStop(0.5, `hsl(${(hue+120)%360},100%,60%)`);
-        gr.addColorStop(1,   `hsl(${(hue+240)%360},100%,50%)`);
+      }
+      case 'omniversal': { // Rainbow reality-bending creature
+        const hue = (ts * 0.08) % 360;
+        
+        // Outer rotating rainbow ring
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(ts * 0.006);
+        
+        ctx.strokeStyle = `hsl(${hue}, 100%, 60%)`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 17, 0, Math.PI*2);
+        ctx.stroke();
+        
+        ctx.strokeStyle = `hsl(${(hue+120)%360}, 100%, 60%)`;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, 0, Math.PI*2);
+        ctx.stroke();
+        
+        ctx.strokeStyle = `hsl(${(hue+240)%360}, 100%, 60%)`;
+        ctx.beginPath();
+        ctx.arc(0, 0, 11, 0, Math.PI*2);
+        ctx.stroke();
+        
+        // Main body - rainbow gradient
+        const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, 16);
+        gr.addColorStop(0, `hsl(${hue}, 100%, 70%)`);
+        gr.addColorStop(0.5, `hsl(${(hue+120)%360}, 100%, 60%)`);
+        gr.addColorStop(1, `hsl(${(hue+240)%360}, 100%, 50%)`);
         ctx.fillStyle = gr;
-        this._drawStar(ctx, cx, cy, 6, 16, 8);
-        ctx.fillStyle = col;
+        this._drawStar(ctx, 0, 0, 6, 16, 9);
+        
+        // Bright core
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        
+        ctx.restore();
         break;
       }
     }
 
-    // Eyes (all creatures)
+    // Expressive eyes (all creatures)
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    
+    // Blink animation
+    const blinkCycle = Math.sin(ts * 0.004) * 0.5 + 0.5;
+    const eyeHeight = 3.5 * (1 - Math.abs(blinkCycle - 0.5) * 2);
+    
+    // Left eye white
     ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.ellipse(cx-5, cy-3, 3, 3.5, 0, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx+5, cy-3, 3, 3.5, 0, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#111';
-    ctx.beginPath(); ctx.arc(cx-4.5, cy-3, 1.8, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx+5.5, cy-3, 1.8, 0, Math.PI*2); ctx.fill();
-    // Shine
+    ctx.beginPath();
+    ctx.ellipse(cx-5, cy-3, 3.5, Math.max(0.5, eyeHeight), 0, 0, Math.PI*2);
+    ctx.fill();
+    
+    // Right eye white
+    ctx.beginPath();
+    ctx.ellipse(cx+5, cy-3, 3.5, Math.max(0.5, eyeHeight), 0, 0, Math.PI*2);
+    ctx.fill();
+    
+    // Pupils
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(cx-5, cy-3, 2.2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx+5, cy-3, 2.2, 0, Math.PI*2);
+    ctx.fill();
+    
+    // Eye shine/reflection
     ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(cx-3.8, cy-4, 0.8, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(cx+6.2, cy-4, 0.8, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx-3.8, cy-4.5, 1, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx+6.2, cy-4.5, 1, 0, Math.PI*2);
+    ctx.fill();
+    
+    ctx.restore();
+  }
+
+  // Helper: Darken a color
+  _darkenColor(color, amount) {
+    const c = parseInt(color.slice(1), 16);
+    const r = Math.max(0, (c >> 16) - Math.floor(50 * amount));
+    const g = Math.max(0, ((c >> 8) & 0xff) - Math.floor(50 * amount));
+    const b = Math.max(0, (c & 0xff) - Math.floor(50 * amount));
+    return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+  }
+
+  // Helper: Lighten a color
+  _lightenColor(color, amount) {
+    const c = parseInt(color.slice(1), 16);
+    const r = Math.min(255, (c >> 16) + Math.floor(80 * amount));
+    const g = Math.min(255, ((c >> 8) & 0xff) + Math.floor(80 * amount));
+    const b = Math.min(255, (c & 0xff) + Math.floor(80 * amount));
+    return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
   }
 
   _drawStar(ctx, cx, cy, points, outer, inner) {
@@ -1083,59 +1448,193 @@ class Game {
 
   _drawPlayer(ctx, px, py, ts) {
     ctx.save();
+    
+    // Strong glow effect
     ctx.shadowColor = '#6366f1';
-    ctx.shadowBlur  = 16;
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
 
-    // Body
-    ctx.fillStyle = '#6366f1';
+    // ── Body with gradient ──
+    const bodyGrad = ctx.createLinearGradient(px-13, py-11, px+13, py+13);
+    bodyGrad.addColorStop(0, '#7c7ef9');
+    bodyGrad.addColorStop(0.5, '#6366f1');
+    bodyGrad.addColorStop(1, '#5152d4');
+    ctx.fillStyle = bodyGrad;
     ctx.beginPath();
-    ctx.roundRect(px-13, py-11, 26, 24, 5);
+    ctx.roundRect(px-13, py-11, 26, 24, 6);
     ctx.fill();
+    
+    // Body outline
+    ctx.strokeStyle = '#4f46e5';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(px-13, py-11, 26, 24, 6);
+    ctx.stroke();
 
-    // Head
-    ctx.fillStyle = '#fbbf24';
+    // ── Head with gradient ──
+    const headGrad = ctx.createRadialGradient(px-2, py-20, 3, px, py-18, 10);
+    headGrad.addColorStop(0, '#fdd76a');
+    headGrad.addColorStop(0.7, '#fbbf24');
+    headGrad.addColorStop(1, '#f59e0b');
+    ctx.fillStyle = headGrad;
     ctx.beginPath();
     ctx.arc(px, py-18, 10, 0, Math.PI*2);
     ctx.fill();
+    
+    // Head shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath();
+    ctx.arc(px+2, py-16, 10, 0, Math.PI*2);
+    ctx.fill();
 
-    // Hat
+    // ── Hat ──
     ctx.fillStyle = '#4f46e5';
     ctx.fillRect(px-11, py-27, 22, 5);
+    
+    // Hat gradient
+    const hatGrad = ctx.createLinearGradient(px-11, py-27, px+11, py-22);
+    hatGrad.addColorStop(0, '#6366f1');
+    hatGrad.addColorStop(1, '#312e81');
+    ctx.fillStyle = hatGrad;
     ctx.fillRect(px-8, py-34, 16, 8);
+    
+    // Hat shine
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(px-8, py-34, 16, 2);
 
-    // Eyes
+    // ── Eyes ──
+    // Left eye
     ctx.fillStyle = '#111';
-    ctx.beginPath(); ctx.arc(px-4, py-19, 2, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(px+4, py-19, 2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(px-4, py-19, 2.5, 0, Math.PI*2);
+    ctx.fill();
+    
+    // Right eye
+    ctx.beginPath();
+    ctx.arc(px+4, py-19, 2.5, 0, Math.PI*2);
+    ctx.fill();
+    
+    // Eye shine
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(px-3, py-20, 1, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(px+5, py-20, 1, 0, Math.PI*2);
+    ctx.fill();
 
-    // Legs (animated walk)
-    const walk = Math.sin(ts * 0.01) * 4;
-    ctx.fillStyle = '#4f46e5';
-    ctx.fillRect(px-9, py+13, 8, 8 + walk);
-    ctx.fillRect(px+1,  py+13, 8, 8 - walk);
+    // ── Smile ──
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(px, py-16, 3, 0, Math.PI);
+    ctx.stroke();
+
+    // ── Arms ──
+    const armBob = Math.sin(ts * 0.012) * 2;
+    
+    // Left arm
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.roundRect(px-16, py-8 + armBob, 5, 12, 2);
+    ctx.fill();
+    
+    // Right arm
+    ctx.beginPath();
+    ctx.roundRect(px+11, py-8 - armBob, 5, 12, 2);
+    ctx.fill();
+
+    // ── Legs (animated walk) ──
+    const walk = Math.sin(ts * 0.01) * 5;
+    
+    // Left leg
+    ctx.fillStyle = '#312e81';
+    ctx.beginPath();
+    ctx.roundRect(px-9, py+13, 7, 10 + walk, 3);
+    ctx.fill();
+    
+    // Right leg
+    ctx.beginPath();
+    ctx.roundRect(px+2, py+13, 7, 10 - walk, 3);
+    ctx.fill();
+    
+    // Leg shine
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.beginPath();
+    ctx.roundRect(px-9, py+13, 2, 10 + walk, 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(px+2, py+13, 2, 10 - walk, 2);
+    ctx.fill();
 
     ctx.shadowBlur = 0;
     ctx.restore();
 
-    // Name
-    ctx.fillStyle   = '#fff';
-    ctx.font        = 'bold 11px "Segoe UI"';
-    ctx.textAlign   = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(this.session?.username?.substring(0,10) || 'YOU', px, py - 37);
+    // ── Player name label ──
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.beginPath();
+    ctx.roundRect(px-35, py-42, 70, 16, 5);
+    ctx.fill();
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px "Segoe UI"';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((this.session?.username?.substring(0, 10) || 'YOU').toUpperCase(), px, py - 34);
   }
 
   _drawSign(ctx, x, y, icon, label) {
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    
+    // Sign post (pole)
+    ctx.fillStyle = '#8b7355';
+    ctx.fillRect(x - 4, y + 12, 8, 20);
+    
+    // Shadow on pole
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(x - 2, y + 12, 2, 20);
+    
+    // Sign board with gradient
+    const signGrad = ctx.createLinearGradient(x - 36, y - 14, x + 36, y + 10);
+    signGrad.addColorStop(0, '#8b7765');
+    signGrad.addColorStop(1, '#6b5b52');
+    ctx.fillStyle = signGrad;
     ctx.beginPath();
     ctx.roundRect(x - 36, y - 14, 72, 24, 6);
     ctx.fill();
-    ctx.font      = '13px "Segoe UI"';
+    
+    // Sign border
+    ctx.strokeStyle = '#4b3b32';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(x - 36, y - 14, 72, 24, 6);
+    ctx.stroke();
+    
+    // Sign shine
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.beginPath();
+    ctx.roundRect(x - 36, y - 14, 72, 6, 6);
+    ctx.fill();
+    
+    // Text background
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.roundRect(x - 32, y - 10, 64, 16, 4);
+    ctx.fill();
+    
+    // Text
+    ctx.font      = 'bold 14px "Segoe UI"';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${icon} ${label}`, x, y - 2);
+    
+    // Split into icon and label
+    ctx.font = '16px Arial';
+    ctx.fillText(icon, x - 12, y - 2);
+    ctx.font = 'bold 11px "Segoe UI"';
+    ctx.fillText(label, x + 14, y - 2);
+    
     ctx.restore();
   }
 
@@ -1160,6 +1659,20 @@ class Game {
     const baseX = (2 + penIndex * 8) * TILE;
     const baseY = (WORLD_H - 4) * TILE;
 
+    // Draw owner name at top of base
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.beginPath();
+    ctx.roundRect(baseX + TILE/2 - 50, baseY - 30, 100, 18, 4);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px "Segoe UI"';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const ownerName = this.session?.username?.substring(0, 12) || 'Base';
+    ctx.fillText(`${ownerName}'s Base`, baseX + TILE/2, baseY - 21);
+    ctx.restore();
+
     ctx.save();
     penCreatures.forEach((uc, i) => {
       const c = uc.creature;
@@ -1176,12 +1689,25 @@ class Game {
       const col = RARITY_COLORS[c.rarity] || '#fff';
       this._drawCreatureSprite(ctx, cx, cy + bob, c.rarity, col, ts);
 
-      // Draw creature name below
+      // Draw creature info below (name, rarity, money/poe)
+      const rarityRates = {
+        'common': 1, 'uncommon': 2, 'rare': 5, 'epic': 10, 'legendary': 25,
+        'mythic': 50, 'divine': 100, 'celestial': 200, 'eternal': 500, 'omniversal': 1000
+      };
+      const poe = rarityRates[c.rarity] || 1;
+
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 9px "Segoe UI"';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText(c.name.substring(0, 8), cx, cy + 20);
+
+      ctx.font = '8px "Segoe UI"';
+      ctx.fillStyle = RARITY_COLORS[c.rarity] || '#fff';
+      ctx.fillText(c.rarity.substring(0, 6), cx, cy + 30);
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText(`$${poe}/s`, cx, cy + 39);
     });
     ctx.restore();
   }
@@ -1374,6 +1900,9 @@ class Game {
     this._setBattleUI(this.myCreature, enemy);
     this._clearLog();
     this._log(`A wild ${enemy.name} appeared!`);
+    if (this.isFirstBattle) {
+      this._log(`Your first battle is guaranteed! 🎁`, 'good');
+    }
 
     const battleScreen = document.getElementById('battle-screen');
     const btnAttack = document.getElementById('btn-attack');
@@ -1573,7 +2102,8 @@ class Game {
   }
 
   _addChat(msg) {
-    const el = document.createElement('div'); el.textContent = msg;
+    const el = document.createElement('div'); 
+    el.textContent = msg;  // Using textContent prevents XSS
     const box = document.getElementById('chat-messages');
     if (box) {
       box.appendChild(el);

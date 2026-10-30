@@ -112,15 +112,15 @@ app.post('/api/login', authLimiter, async (req, res) => {
   const err = validateCredentials(username, password);
   if (err) return res.status(400).json({ error: err });
   try {
-    const { data: user } = await supabase.from('users').select('id,username,password').eq('username', username).maybeSingle();
+    const { data: user } = await supabase.from('users').select('id,username,password,money').eq('username', username).maybeSingle();
 
     if (!user) {
       // Auto-register with hashed password
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
-      const { data: newUser, error } = await supabase.from('users').insert({ username, password: hash }).select('id,username').single();
+      const { data: newUser, error } = await supabase.from('users').insert({ username, password: hash, money: 0 }).select('id,username,money').single();
       if (error) throw error;
       await giveStarterCreature(newUser.id);
-      return res.json({ userId: newUser.id, username: newUser.username, isNewUser: true });
+      return res.json({ userId: newUser.id, username: newUser.username, money: newUser.money || 0, isNewUser: true });
     }
 
     // Check password — supports both bcrypt hashes and legacy plain-text
@@ -149,7 +149,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
       if (oldSocket) oldSocket.emit('kicked', 'Your account was opened in another tab or browser.');
     }
 
-    res.json({ userId: user.id, username: user.username, isNewUser: false });
+    res.json({ userId: user.id, username: user.username, money: user.money || 0, isNewUser: false });
   } catch (e) {
     console.error('Login:', e.message);
     res.status(500).json({ error: 'Login failed.' });
@@ -256,6 +256,25 @@ app.post('/api/users/:userId/creatures/:userCreatureId/equip', async (req, res) 
   } catch (e) {
     console.error('Equip creature:', e.message);
     res.status(500).json({ error: 'Could not equip creature.' });
+  }
+});
+
+// ── API: Save player money ────────────────────────────────
+app.post('/api/users/:userId/money', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { money } = req.body;
+    if (money === undefined) return res.status(400).json({ error: 'Missing money value.' });
+    
+    const { error } = await supabase.from('users')
+      .update({ money: Math.floor(money) })
+      .eq('id', userId);
+    
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Save money:', e.message);
+    res.status(500).json({ error: 'Could not save money.' });
   }
 });
 
