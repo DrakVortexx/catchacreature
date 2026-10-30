@@ -123,8 +123,94 @@ loginForm.addEventListener('submit', async e => {
 async function openDashboard() {
   showScreen('dashboard');
   document.getElementById('dash-username').textContent = session.username;
+  await loadLeaderboard(); // Load leaderboard when dashboard opens
 }
 window.openDashboard = openDashboard;
+
+// ── Leaderboard ──────────────────────────────────────────
+async function loadLeaderboard() {
+  const type = document.getElementById('leaderboard-type')?.value || 'money';
+  const contentEl = document.getElementById('leaderboard-content');
+  const userRankEl = document.getElementById('user-rank');
+  const userValueEl = document.getElementById('user-value');
+  
+  if (!contentEl) return;
+  
+  contentEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray);">Loading...</div>';
+  
+  try {
+    const res = await fetch(`/api/leaderboard?type=${type}&limit=10`);
+    if (!res.ok) throw new Error('Failed to load leaderboard');
+    
+    const data = await res.json();
+    const { type: leaderboardType, columnDisplay, data: leaderboardData } = data;
+    
+    // Update UI
+    let html = '';
+    
+    if (leaderboardData.length === 0) {
+      html = '<div style="text-align:center;padding:40px;color:var(--gray);">No data yet!</div>';
+    } else {
+      html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+      
+      // Medal emojis for top 3
+      const medals = ['🥇', '🥈', '🥉'];
+      
+      leaderboardData.forEach((entry, index) => {
+        const isTop3 = index < 3;
+        const medal = isTop3 ? medals[index] : '';
+        const valueFormatted = leaderboardType === 'money' 
+          ? formatMoney(entry.value)
+          : entry.value.toLocaleString();
+        
+        html += `
+          <div style="display:flex;align-items:center;padding:12px 16px;background:${index % 2 === 0 ? 'rgba(15,13,36,.4)' : 'rgba(15,13,36,.2)'};border-radius:10px;border:1px solid var(--border);">
+            <div style="width:50px;font-size:20px;font-weight:800;color:${isTop3 ? '#f59e0b' : 'var(--gray)'};">${medal} #${entry.rank}</div>
+            <div style="flex:1;font-size:15px;font-weight:${entry.userId === session.userId ? '800' : '600'};color:${entry.userId === session.userId ? '#6366f1' : '#fff'};">${entry.username}</div>
+            <div style="font-size:15px;font-weight:700;color:#10b981;">${valueFormatted}</div>
+          </div>
+        `;
+        
+        // Find current user's position
+        if (entry.userId === session.userId) {
+          if (userRankEl) userRankEl.textContent = `#${entry.rank}`;
+          if (userValueEl) userValueEl.textContent = valueFormatted;
+        }
+      });
+      
+      html += '</div>';
+    }
+    
+    contentEl.innerHTML = html;
+    
+  } catch (error) {
+    console.error('Leaderboard error:', error);
+    contentEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--danger);">Failed to load leaderboard</div>';
+  }
+}
+
+function formatMoney(amount) {
+  if (amount >= 1000000) {
+    return `$${(amount / 1000000).toFixed(1)}M`;
+  } else if (amount >= 1000) {
+    return `$${(amount / 1000).toFixed(1)}K`;
+  }
+  return `$${amount.toLocaleString()}`;
+}
+
+// Add event listeners for leaderboard controls
+document.addEventListener('DOMContentLoaded', () => {
+  const refreshBtn = document.getElementById('btn-refresh-leaderboard');
+  const typeSelect = document.getElementById('leaderboard-type');
+  
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', loadLeaderboard);
+  }
+  
+  if (typeSelect) {
+    typeSelect.addEventListener('change', loadLeaderboard);
+  }
+});
 
 async function refreshBaseCount() {
   if (!session) return;

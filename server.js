@@ -278,6 +278,78 @@ app.post('/api/users/:userId/money', async (req, res) => {
   }
 });
 
+// ── API: Get leaderboard ──────────────────────────────────
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const { type = 'money', limit = 10 } = req.query;
+    
+    let column;
+    let columnDisplay;
+    
+    switch (type) {
+      case 'money':
+        column = 'money';
+        columnDisplay = 'Money';
+        break;
+      case 'creatures':
+        // Get creature counts by joining with user_creatures
+        const { data: creatureCounts, error: creatureError } = await supabase
+          .from('users')
+          .select('id, username, money, user_creatures(count)')
+          .order('user_creatures.count', { ascending: false, foreignTable: 'user_creatures' })
+          .limit(parseInt(limit));
+        
+        if (creatureError) throw creatureError;
+        
+        const formatted = creatureCounts.map((user, index) => ({
+          rank: index + 1,
+          username: user.username,
+          value: user.user_creatures?.[0]?.count || 0,
+          userId: user.id
+        }));
+        
+        return res.json({ 
+          type: 'creatures',
+          columnDisplay: 'Creatures Caught',
+          data: formatted 
+        });
+        
+      case 'wins':
+        column = 'battles_won';
+        columnDisplay = 'Battle Wins';
+        break;
+      default:
+        column = 'money';
+        columnDisplay = 'Money';
+    }
+    
+    // For money and battle wins - simple query
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, username, money, battles_won')
+      .order(column, { ascending: false })
+      .limit(parseInt(limit));
+    
+    if (error) throw error;
+    
+    const formatted = data.map((user, index) => ({
+      rank: index + 1,
+      username: user.username,
+      value: user[column],
+      userId: user.id
+    }));
+    
+    res.json({ 
+      type,
+      columnDisplay,
+      data: formatted 
+    });
+  } catch (e) {
+    console.error('Leaderboard error:', e.message);
+    res.status(500).json({ error: 'Could not load leaderboard.' });
+  }
+});
+
 // ── API: Lobbies ──────────────────────────────────────────
 app.get('/api/lobbies', (req, res) => {
   res.json(Array.from(lobbies.values()).map(l => ({

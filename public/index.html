@@ -307,11 +307,76 @@
       <h1>Catch a Creature</h1>
       <p>Welcome, <span id="dash-username">Player</span></p>
     </header>
-    <div class="dashboard-content">
-      <button id="btn-play" class="dashboard-btn">Quick play</button>
-      <button id="btn-servers" class="dashboard-btn">Server select</button>
-      <button id="btn-settings" class="dashboard-btn">Settings</button>
-      <button id="btn-logout" class="dashboard-btn logout-btn">Logout</button>
+    
+    <div style="display:flex;gap:40px;max-width:1200px;margin:0 auto;justify-content:center;align-items:flex-start;">
+      <!-- Left column: Menu buttons -->
+      <div class="dashboard-content" style="flex:0 0 400px;">
+        <button id="btn-play" class="dashboard-btn">Quick play</button>
+        <button id="btn-servers" class="dashboard-btn">Server select</button>
+        <button id="btn-settings" class="dashboard-btn">Settings</button>
+        <button id="btn-logout" class="dashboard-btn logout-btn">Logout</button>
+      </div>
+      
+      <!-- Right column: Leaderboard -->
+      <div style="flex:0 0 500px;">
+        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:20px;padding:28px;margin-bottom:24px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <h2 style="font-size:28px;font-weight:800;background:linear-gradient(135deg,#f59e0b,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">🏆 Leaderboard</h2>
+            <div style="display:flex;gap:12px;">
+              <button id="btn-refresh-leaderboard" class="btn-secondary" style="padding:8px 18px;font-size:13px;">🔄 Refresh</button>
+              <select id="leaderboard-type" style="padding:8px 14px;background:rgba(15,13,36,.6);color:var(--light);border:2px solid var(--border);border-radius:10px;font-size:13px;">
+                <option value="money">💰 Money</option>
+                <option value="creatures">🦴 Creatures Caught</option>
+                <option value="wins">⚔️ Battle Wins</option>
+              </select>
+            </div>
+          </div>
+          
+          <div id="leaderboard-content" style="min-height:320px;">
+            <div style="text-align:center;padding:40px;color:var(--gray);">
+              <div style="font-size:48px;margin-bottom:16px;">🏆</div>
+              <p style="font-size:16px;">Loading leaderboard...</p>
+            </div>
+          </div>
+          
+          <div style="display:flex;justify-content:center;gap:16px;margin-top:20px;">
+            <div style="text-align:center;padding:12px 24px;background:rgba(15,13,36,.4);border-radius:10px;border:1px solid var(--border);">
+              <div style="font-size:12px;color:var(--gray);margin-bottom:4px;">Your Rank</div>
+              <div id="user-rank" style="font-size:20px;font-weight:800;color:#f59e0b;">#--</div>
+            </div>
+            <div style="text-align:center;padding:12px 24px;background:rgba(15,13,36,.4);border-radius:10px;border:1px solid var(--border);">
+              <div style="font-size:12px;color:var(--gray);margin-bottom:4px;">Your Value</div>
+              <div id="user-value" style="font-size:20px;font-weight:800;color:#10b981;">--</div>
+            </div>
+          </div>
+        </div>
+        
+        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:20px;padding:24px;">
+          <h3 style="font-size:18px;font-weight:700;margin-bottom:16px;color:var(--accent);">🎯 Money Rate Examples</h3>
+          <div style="font-size:13px;color:var(--gray);line-height:1.8;">
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(99,102,241,.2);">
+              <span>Common creature:</span>
+              <span style="color:#10b981;font-weight:600;">$1/s</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(99,102,241,.2);">
+              <span>Epic creature:</span>
+              <span style="color:#8b5cf6;font-weight:600;">$100/s</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(99,102,241,.2);">
+              <span>Celestial creature:</span>
+              <span style="color:#06b6d4;font-weight:600;">$50,000/s</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(99,102,241,.2);">
+              <span>Eternal creature:</span>
+              <span style="color:#ec4899;font-weight:600;">$250,000/s</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;">
+              <span><strong>OMNIVERSAL creature:</strong></span>
+              <span style="color:#f472b6;font-weight:800;">$5,000,000/s</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -420,6 +485,7 @@
     <div class="hp-bar-outer"><div class="hp-bar-inner" id="hud-hp-bar" style="width:0%"></div></div>
     <p id="hud-hp-text" style="font-size:11px;color:var(--gray);margin-top:3px;"></p>
   </div>
+  <button id="btn-store-pen" class="hud-btn pen-btn" style="position:absolute;top:16px;left:240px;padding:10px 20px;font-size:13px;">Open Base</button>
   <div id="hud-topright" class="hud-panel">
     <h3 id="hud-lobby-name">Lobby</h3>
     <p id="hud-player-count">1 / 8 players</p>
@@ -460,7 +526,6 @@
   <canvas id="minimap" width="150" height="110"></canvas>
   <div id="hud-bottom">
     <button id="btn-fight" class="hud-btn">Fight</button>
-    <button id="btn-store-pen" class="hud-btn pen-btn">Open Base</button>
     <button id="btn-menu" class="hud-btn">Menu</button>
   </div>
 </div>

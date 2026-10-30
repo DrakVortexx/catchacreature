@@ -797,15 +797,15 @@ class Game {
       if (this.myCreature) {
         const rarityRates = {
           'common': 1,
-          'uncommon': 2,
-          'rare': 5,
-          'epic': 10,
-          'legendary': 25,
-          'mythic': 50,
-          'divine': 100,
-          'celestial': 200,
-          'eternal': 500,
-          'omniversal': 1000
+          'uncommon': 5,
+          'rare': 25,
+          'epic': 100,
+          'legendary': 500,
+          'mythic': 2500,
+          'divine': 10000,
+          'celestial': 50000,
+          'eternal': 250000,
+          'omniversal': 5000000
         };
         const rate = rarityRates[this.myCreature.rarity] || 1;
         this.money += rate;
@@ -949,8 +949,8 @@ class Game {
 
       // Name tag with rarity and money info
       const rarityRates = {
-        'common': 1, 'uncommon': 2, 'rare': 5, 'epic': 10, 'legendary': 25,
-        'mythic': 50, 'divine': 100, 'celestial': 200, 'eternal': 500, 'omniversal': 1000
+        'common': 1, 'uncommon': 5, 'rare': 25, 'epic': 100, 'legendary': 500,
+        'mythic': 2500, 'divine': 10000, 'celestial': 50000, 'eternal': 250000, 'omniversal': 5000000
       };
       const poe = rarityRates[wc.type.rarity] || 1;
       
@@ -1691,8 +1691,8 @@ class Game {
 
       // Draw creature info below (name, rarity, money/poe)
       const rarityRates = {
-        'common': 1, 'uncommon': 2, 'rare': 5, 'epic': 10, 'legendary': 25,
-        'mythic': 50, 'divine': 100, 'celestial': 200, 'eternal': 500, 'omniversal': 1000
+        'common': 1, 'uncommon': 5, 'rare': 25, 'epic': 100, 'legendary': 500,
+        'mythic': 2500, 'divine': 10000, 'celestial': 50000, 'eternal': 250000, 'omniversal': 5000000
       };
       const poe = rarityRates[c.rarity] || 1;
 
